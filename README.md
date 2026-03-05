@@ -15,17 +15,71 @@ A single-binary, zero-dependency homelab discovery and monitoring system with me
 - **Secure credentials** -- AES-256-GCM encrypted secret store, no passwords in CLI or env
 - **External plugins** -- extend with any language via subprocess JSON protocol
 
-## Quick Start
+## Install
+
+Download the latest binary for your platform from [Releases](https://github.com/dx111ge/homelabmon/releases/latest). No dependencies, no compilation needed.
+
+### Linux (x86_64)
 
 ```bash
-# Build from source
-go build -o homelabmon .
-
-# Run with web dashboard
-./homelabmon --ui
-
-# Open http://localhost:9600
+curl -sL https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-linux-amd64 -o homelabmon
+chmod +x homelabmon
+sudo mv homelabmon /usr/local/bin/
+homelabmon --ui
 ```
+
+### Linux ARM64 (RPi 4/5, Oracle Cloud)
+
+```bash
+curl -sL https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-linux-arm64 -o homelabmon
+chmod +x homelabmon
+sudo mv homelabmon /usr/local/bin/
+homelabmon --ui
+```
+
+### Linux ARM (RPi 3/Zero)
+
+```bash
+curl -sL https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-linux-arm -o homelabmon
+chmod +x homelabmon
+sudo mv homelabmon /usr/local/bin/
+homelabmon --ui
+```
+
+### macOS (Apple Silicon)
+
+```bash
+curl -sL https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-darwin-arm64 -o homelabmon
+chmod +x homelabmon
+sudo mv homelabmon /usr/local/bin/
+homelabmon --ui
+```
+
+### macOS (Intel)
+
+```bash
+curl -sL https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-darwin-amd64 -o homelabmon
+chmod +x homelabmon
+sudo mv homelabmon /usr/local/bin/
+homelabmon --ui
+```
+
+### Windows
+
+Download [homelabmon-windows-amd64.exe](https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-windows-amd64.exe) and run:
+
+```powershell
+.\homelabmon-windows-amd64.exe --ui
+```
+
+### Build from Source
+
+```bash
+go build -o homelabmon .
+./homelabmon --ui
+```
+
+Then open **http://localhost:9600**
 
 ## Usage
 
