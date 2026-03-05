@@ -81,6 +81,63 @@ go build -o homelabmon .
 
 Then open **http://localhost:9600**
 
+## Linux Permissions
+
+HomelabMon runs as a regular user for basic metrics. Some features require group membership or capabilities:
+
+| Feature | Requirement | Why |
+|---------|------------|-----|
+| Basic metrics (CPU, mem, disk) | None | Reads from `/proc`, no special access needed |
+| Docker containers | `docker` group | Reads `/var/run/docker.sock` |
+| Network scanning (`--scan`) | `root` or `cap_net_raw` | ARP/mDNS use raw sockets for discovery |
+| Listening ports | `root` or same user | `gopsutil` reads `/proc/net/tcp` -- sees all ports as root, only own ports as user |
+| Bind to port < 1024 | `root` or `cap_net_bind_service` | Default port 9600 does not need this |
+
+### Recommended Setup
+
+Add your user to the `docker` group (if you want Docker discovery):
+
+```bash
+sudo usermod -aG docker $USER
+# Log out and back in for the group change to take effect
+```
+
+For network scanning without running as root, grant the binary the necessary capability:
+
+```bash
+sudo setcap cap_net_raw+ep /usr/local/bin/homelabmon
+```
+
+### Running as a systemd Service
+
+```ini
+# /etc/systemd/system/homelabmon.service
+[Unit]
+Description=HomelabMon monitoring agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+Group=YOUR_USER
+ExecStart=/usr/local/bin/homelabmon --ui --scan
+Restart=on-failure
+RestartSec=5
+AmbientCapabilities=CAP_NET_RAW
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now homelabmon
+```
+
+The `AmbientCapabilities=CAP_NET_RAW` line grants network scanning without running as root. The service user should be in the `docker` group if Docker discovery is wanted.
+
 ## Usage
 
 ```bash
