@@ -77,6 +77,14 @@
                     <span class="text-gray-500">days</span>
                 </div>
             </div>
+            <div class="flex items-center justify-between border-t border-gray-800 pt-3">
+                <span class="text-gray-400 flex items-center gap-1">
+                    <i class="fa-solid fa-location-dot"></i>Site label
+                    <span class="help-tip" data-tip="Label this node with a site name for multi-site federation. Nodes with the same site are grouped together on the dashboard. Examples: home, office, cloud."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <input type="text" x-model="site" placeholder="home"
+                    class="w-32 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+            </div>
         </div>
         <div class="flex items-center gap-3 mt-4">
             <button @click="save()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors">
@@ -106,6 +114,10 @@
             <div class="flex items-center justify-between">
                 <span class="text-gray-400">Version</span>
                 <span class="font-mono text-gray-300">{{.Version}}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Site</span>
+                <span class="text-gray-300">{{if .Site}}{{.Site}}{{else}}<span class="text-gray-600">not set</span>{{end}}</span>
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-gray-400">Scanning</span>
@@ -223,6 +235,7 @@ function settingsEditor() {
         mem: {{printf "%.0f" .MemThreshold}},
         disk: {{printf "%.0f" .DiskThreshold}},
         retention: {{.RetentionDays}},
+        site: '{{.Site}}',
         msg: '',
         async save() {
             this.msg = '';
@@ -234,7 +247,8 @@ function settingsEditor() {
                     retention_days: String(this.retention),
                     cpu_threshold: String(this.cpu),
                     mem_threshold: String(this.mem),
-                    disk_threshold: String(this.disk)
+                    disk_threshold: String(this.disk),
+                    site: this.site.trim()
                 })
             });
             this.msg = await res.text();

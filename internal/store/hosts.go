@@ -12,18 +12,19 @@ func (s *Store) UpsertHost(ctx context.Context, h *models.Host) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO hosts (id, hostname, display_name, monitor_type, device_type, os, arch, platform, kernel,
 			cpu_model, cpu_cores, memory_total, ip_addresses, mac_address, vendor,
-			discovered_via, last_seen, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+			discovered_via, site, last_seen, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
 		ON CONFLICT(id) DO UPDATE SET
 			hostname=excluded.hostname, os=excluded.os, arch=excluded.arch,
 			platform=excluded.platform, kernel=excluded.kernel,
 			cpu_model=excluded.cpu_model, cpu_cores=excluded.cpu_cores,
 			memory_total=excluded.memory_total, ip_addresses=excluded.ip_addresses,
 			mac_address=excluded.mac_address, vendor=excluded.vendor,
+			site=CASE WHEN excluded.site != '' THEN excluded.site ELSE hosts.site END,
 			last_seen=datetime('now'), status=excluded.status
 	`, h.ID, h.Hostname, h.DisplayName, h.MonitorType, h.DeviceType, h.OS, h.Arch, h.Platform, h.Kernel,
 		h.CPUModel, h.CPUCores, h.MemoryTotal, h.IPAddressesJSON(), h.MACAddress, h.Vendor,
-		h.DiscoveredVia, h.Status)
+		h.DiscoveredVia, h.Site, h.Status)
 	return err
 }
 
@@ -34,11 +35,11 @@ func (s *Store) GetHost(ctx context.Context, id string) (*models.Host, error) {
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, hostname, display_name, monitor_type, device_type, os, arch, platform, kernel,
 			cpu_model, cpu_cores, memory_total, ip_addresses, mac_address, vendor,
-			discovered_via, first_seen, last_seen, status
+			discovered_via, site, first_seen, last_seen, status
 		FROM hosts WHERE id = ?
 	`, id).Scan(&h.ID, &h.Hostname, &h.DisplayName, &h.MonitorType, &h.DeviceType, &h.OS, &h.Arch,
 		&h.Platform, &h.Kernel, &h.CPUModel, &h.CPUCores, &h.MemoryTotal, &ips,
-		&h.MACAddress, &h.Vendor, &h.DiscoveredVia, &firstSeen, &lastSeen, &h.Status)
+		&h.MACAddress, &h.Vendor, &h.DiscoveredVia, &h.Site, &firstSeen, &lastSeen, &h.Status)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -55,8 +56,8 @@ func (s *Store) ListHosts(ctx context.Context) ([]models.Host, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, hostname, display_name, monitor_type, device_type, os, arch, platform, kernel,
 			cpu_model, cpu_cores, memory_total, ip_addresses, mac_address, vendor,
-			discovered_via, first_seen, last_seen, status
-		FROM hosts ORDER BY hostname
+			discovered_via, site, first_seen, last_seen, status
+		FROM hosts ORDER BY site, hostname
 	`)
 	if err != nil {
 		return nil, err
@@ -69,7 +70,7 @@ func (s *Store) ListHosts(ctx context.Context) ([]models.Host, error) {
 		var ips, firstSeen, lastSeen string
 		if err := rows.Scan(&h.ID, &h.Hostname, &h.DisplayName, &h.MonitorType, &h.DeviceType, &h.OS, &h.Arch,
 			&h.Platform, &h.Kernel, &h.CPUModel, &h.CPUCores, &h.MemoryTotal, &ips,
-			&h.MACAddress, &h.Vendor, &h.DiscoveredVia, &firstSeen, &lastSeen, &h.Status); err != nil {
+			&h.MACAddress, &h.Vendor, &h.DiscoveredVia, &h.Site, &firstSeen, &lastSeen, &h.Status); err != nil {
 			return nil, err
 		}
 		h.IPAddresses = models.ParseIPAddresses(ips)

@@ -4,9 +4,7 @@
 </div>
 {{end}}
 
-{{define "dashboard-cards"}}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-    {{range .Hosts}}
+{{define "host-card"}}
     <a href="/ui/host/{{.Host.ID}}" class="block bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
         <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
@@ -76,6 +74,28 @@
         <div class="text-xs text-gray-500 italic">No metrics available</div>
         {{end}}
     </a>
+{{end}}
+
+{{define "dashboard-cards"}}
+{{if .HasMultiSites}}
+{{range .Sites}}
+<div class="mb-6">
+    <div class="flex items-center gap-2 mb-3 text-gray-400">
+        <i class="fa-solid fa-location-dot"></i>
+        <span class="text-sm font-medium">{{.Name}}</span>
+        <span class="text-xs text-gray-500">({{len .Hosts}})</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {{range .Hosts}}
+    {{template "host-card" .}}
+    {{end}}
+    </div>
+</div>
+{{end}}
+{{else}}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {{range .Hosts}}
+    {{template "host-card" .}}
     {{end}}
 
     {{if not .Hosts}}
@@ -86,6 +106,7 @@
     </div>
     {{end}}
 </div>
+{{end}}
 
 {{if .PassiveDevices}}
 <div class="mt-6 mb-2 flex items-center gap-2 text-gray-400">

@@ -50,6 +50,9 @@ func initConfig() {
 	viper.AutomaticEnv()
 	viper.ReadInConfig()
 
+	// Enable config file watching (callbacks registered in runAgent)
+	viper.WatchConfig()
+
 	// Setup logger
 	level, _ := zerolog.ParseLevel(viper.GetString("log-level"))
 	if level == zerolog.NoLevel {

@@ -93,9 +93,27 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		LastHeartbeat: &now,
 		Status:        "online",
 		Version:       hb.Version,
+		Site:          hb.Site,
 	})
 
-	// Respond with our own heartbeat (including services)
+	// Gossip: auto-add unknown peers from the sender's known list
+	for _, gp := range hb.KnownPeers {
+		if gp.ID == t.identity.ID || gp.ID == hb.NodeID {
+			continue
+		}
+		existing, _ := t.store.GetPeer(r.Context(), gp.ID)
+		if existing == nil {
+			t.store.UpsertPeer(r.Context(), &models.PeerInfo{
+				ID:      gp.ID,
+				Address: gp.Address,
+				Status:  "unknown",
+				Site:    gp.Site,
+			})
+			log.Info().Str("peer_id", gp.ID[:8]).Str("addr", gp.Address).Str("via", hb.Hostname).Msg("discovered peer via gossip")
+		}
+	}
+
+	// Respond with our own heartbeat (including services and known peers for gossip)
 	host, _ := t.store.GetHost(r.Context(), t.identity.ID)
 	allSvcs, _ := t.store.ListServicesByHost(r.Context(), t.identity.ID)
 	var mySvcs []models.DiscoveredService
@@ -104,14 +122,25 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 			mySvcs = append(mySvcs, s)
 		}
 	}
+	myPeers, _ := t.store.ListPeers(r.Context())
+	var knownPeers []models.PeerAddr
+	for _, p := range myPeers {
+		knownPeers = append(knownPeers, models.PeerAddr{
+			ID:      p.ID,
+			Address: p.Address,
+			Site:    p.Site,
+		})
+	}
 	myHB := models.Heartbeat{
-		NodeID:    t.identity.ID,
-		Hostname:  t.identity.Hostname,
-		Version:   t.identity.Version,
-		Timestamp: time.Now().UTC(),
-		Host:      host,
-		Metric:    t.collector.Latest(),
-		Services:  mySvcs,
+		NodeID:     t.identity.ID,
+		Hostname:   t.identity.Hostname,
+		Version:    t.identity.Version,
+		Site:       t.identity.Site,
+		Timestamp:  time.Now().UTC(),
+		Host:       host,
+		Metric:     t.collector.Latest(),
+		Services:   mySvcs,
+		KnownPeers: knownPeers,
 	}
 
 	writeJSON(w, http.StatusOK, myHB)

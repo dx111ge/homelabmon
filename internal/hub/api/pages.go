@@ -54,12 +54,19 @@ type hostWithMetric struct {
 	Services []models.DiscoveredService
 }
 
+type siteGroup struct {
+	Name  string
+	Hosts []hostWithMetric
+}
+
 type dashboardData struct {
 	Title          string
 	Version        string
 	HostCount      int
 	OnlineCount    int
 	Hosts          []hostWithMetric
+	Sites          []siteGroup
+	HasMultiSites  bool
 	PassiveDevices []models.Host
 }
 
@@ -121,12 +128,32 @@ func (u *UIServer) buildDashboardData(r *http.Request) dashboardData {
 		hostCards = append(hostCards, hm)
 	}
 
+	// Group hosts by site for federation view
+	siteMap := make(map[string][]hostWithMetric)
+	var siteOrder []string
+	for _, hm := range hostCards {
+		site := hm.Host.Site
+		if site == "" {
+			site = "Local"
+		}
+		if _, exists := siteMap[site]; !exists {
+			siteOrder = append(siteOrder, site)
+		}
+		siteMap[site] = append(siteMap[site], hm)
+	}
+	var sites []siteGroup
+	for _, name := range siteOrder {
+		sites = append(sites, siteGroup{Name: name, Hosts: siteMap[name]})
+	}
+
 	return dashboardData{
 		Title:          "Dashboard",
 		Version:        u.identity.Version,
 		HostCount:      len(hosts),
 		OnlineCount:    onlineCount,
 		Hosts:          hostCards,
+		Sites:          sites,
+		HasMultiSites:  len(sites) > 1,
 		PassiveDevices: passiveDevices,
 	}
 }
@@ -296,6 +323,7 @@ type settingsPageData struct {
 	ScanEnabled   bool
 	AuthEnabled   bool
 	NodeID        string
+	Site          string
 	CPUThreshold  float64
 	MemThreshold  float64
 	DiskThreshold float64
@@ -325,6 +353,7 @@ func (u *UIServer) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		ScanEnabled:   u.scanEnabled,
 		AuthEnabled:   u.auth.Enabled(),
 		NodeID:        u.identity.ID,
+		Site:          viper.GetString("site"),
 		CPUThreshold:  viper.GetFloat64("notify-cpu-threshold"),
 		MemThreshold:  viper.GetFloat64("notify-mem-threshold"),
 		DiskThreshold: viper.GetFloat64("notify-disk-threshold"),
@@ -361,6 +390,7 @@ func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		DiskThreshold string `json:"disk_threshold"`
 		NtfyURL       string `json:"ntfy_url"`
 		WebhookURL    string `json:"webhook_url"`
+		Site          string `json:"site"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Write([]byte(`<span class="text-red-400 text-sm"><i class="fa-solid fa-xmark mr-1"></i>Invalid request</span>`))
@@ -401,6 +431,12 @@ func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	u.store.SetSetting(ctx, "notify-webhook", webhookURL)
 	viper.Set("notify-ntfy", ntfyURL)
 	viper.Set("notify-webhook", webhookURL)
+
+	// Site label
+	site := strings.TrimSpace(req.Site)
+	u.store.SetSetting(ctx, "site", site)
+	viper.Set("site", site)
+	u.identity.Site = site
 
 	// Rebuild senders
 	var senders []notify.Sender

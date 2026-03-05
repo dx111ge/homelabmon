@@ -97,14 +97,26 @@ func (h *HeartbeatService) sendHeartbeats(ctx context.Context) {
 		}
 	}
 
+	// Build known peer addresses for gossip
+	var knownPeers []models.PeerAddr
+	for _, p := range peers {
+		knownPeers = append(knownPeers, models.PeerAddr{
+			ID:      p.ID,
+			Address: p.Address,
+			Site:    p.Site,
+		})
+	}
+
 	hb := models.Heartbeat{
-		NodeID:    h.identity.ID,
-		Hostname:  h.identity.Hostname,
-		Version:   h.identity.Version,
-		Timestamp: time.Now().UTC(),
-		Host:      host,
-		Metric:    h.collector.Latest(),
-		Services:  svcs,
+		NodeID:     h.identity.ID,
+		Hostname:   h.identity.Hostname,
+		Version:    h.identity.Version,
+		Site:       h.identity.Site,
+		Timestamp:  time.Now().UTC(),
+		Host:       host,
+		Metric:     h.collector.Latest(),
+		Services:   svcs,
+		KnownPeers: knownPeers,
 	}
 
 	body, _ := json.Marshal(hb)
@@ -160,7 +172,25 @@ func (h *HeartbeatService) sendToPeer(ctx context.Context, peer models.PeerInfo,
 		LastHeartbeat: &now,
 		Status:        "online",
 		Version:       peerHB.Version,
+		Site:          peerHB.Site,
 	})
+
+	// Gossip: auto-add unknown peers discovered via this peer
+	for _, gp := range peerHB.KnownPeers {
+		if gp.ID == h.identity.ID || gp.ID == peerHB.NodeID {
+			continue // skip self and the peer we just talked to
+		}
+		existing, _ := h.store.GetPeer(ctx, gp.ID)
+		if existing == nil {
+			h.store.UpsertPeer(ctx, &models.PeerInfo{
+				ID:      gp.ID,
+				Address: gp.Address,
+				Status:  "unknown",
+				Site:    gp.Site,
+			})
+			log.Info().Str("peer_id", gp.ID[:8]).Str("addr", gp.Address).Str("via", peer.Hostname).Msg("discovered peer via gossip")
+		}
+	}
 
 	log.Debug().Str("peer", peer.Hostname).Msg("heartbeat exchanged")
 }

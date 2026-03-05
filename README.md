@@ -207,6 +207,32 @@ After enrollment, all peer communication uses mutual TLS (TLS 1.3, ECDSA P-256).
 
 mTLS is optional -- nodes without certificates communicate over plain HTTP as before.
 
+## Multi-Site Federation
+
+Label nodes with `--site` to group them on the dashboard:
+
+```bash
+# Home site
+homelabmon --ui --site home --peer 192.168.1.10:9600
+
+# Cloud VPS
+homelabmon --site cloud --peer your-home-ip:9600
+```
+
+Nodes exchange peer lists via gossip -- connect one node at a remote site to any local node, and all peers discover each other automatically. The dashboard groups hosts by site when multiple sites exist.
+
+You can also set the site label from the Settings page in the web UI.
+
+## Config Hot-Reload
+
+Settings in `~/.homelabmon/config.yaml` are watched for changes. Edits take effect immediately without restarting:
+
+- Log level
+- Notification URLs and thresholds
+- Metric retention
+
+Settings changed via the web UI are also applied instantly.
+
 ## Usage
 
 ```bash
@@ -219,6 +245,7 @@ homelabmon --peer 192.168.1.10:9600          # + connect to another node
 homelabmon --notify-ntfy https://ntfy.sh/x   # + push notifications
 homelabmon --retention-days 30               # keep 30 days of metrics (default: 7)
 homelabmon --retention-days 0                # keep metrics forever
+homelabmon --site home                      # label this node for multi-site federation
 ```
 
 All flags can be combined. Every node runs the same binary.

@@ -61,6 +61,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 bind: ":9600"
 collect-interval: 30
 log-level: info
+# site: ""                    # site label for multi-site federation
 # ui: false
 # llm: ""
 # scan: false

@@ -10,7 +10,7 @@
 | 4 | Intelligence | `COMPLETE` | Ollama LLM integration, tool-calling chat, natural language CMDB queries |
 | 4b | Charts & Device Mgmt | `COMPLETE` | Inline statistics (Chart.js), device category/delete, display names |
 | 5 | Integrations | `COMPLETE` | FRITZ!Box, Unifi, HA, Pi-hole, pfSense, SNMP scanner, external plugins |
-| 6 | Security & Polish | `IN PROGRESS` | mTLS, enrollment, auth, install scripts, systemd/launchd/Windows service |
+| 6 | Security & Polish | `COMPLETE` | mTLS, enrollment, auth, install scripts, systemd/launchd/Windows service, config hot-reload, peer federation |
 
 ---
 
@@ -370,9 +370,24 @@
 - [x] TLS 1.3 minimum
 - [x] Verified: CA generation, token generation, HTTPS serving, browser access, enrollment rejection
 
-### 6.6 Remaining
-- [ ] Config hot-reload
-- [ ] Peer federation (multi-site)
+### 6.6 Config Hot-Reload
+- [x] `viper.WatchConfig()` watches `~/.homelabmon/config.yaml` for changes
+- [x] `OnConfigChange` callback updates: log level, notification senders, thresholds, retention
+- [x] Threshold check goroutine reads thresholds dynamically from viper each cycle (no restart needed)
+- [x] Settings changed via web UI also apply instantly via viper
+
+### 6.7 Peer Federation (Multi-Site)
+- [x] Migration 006: `site` column on `hosts` and `peers` tables
+- [x] `--site` CLI flag and config option for labeling nodes
+- [x] Site label configurable from Settings UI (saved to DB + viper)
+- [x] Gossip protocol: heartbeats include `KnownPeers` list (ID + address + site)
+- [x] Auto-discovery: nodes add unknown peers from gossip (transitive peer discovery)
+- [x] Both heartbeat sender and handler process gossip peers
+- [x] Dashboard groups hosts by site when multiple sites exist (`HasMultiSites`)
+- [x] Host card extracted to reusable `host-card` template block
+- [x] Node Info card on Settings page shows current site label
+- [x] README updated with federation and hot-reload documentation
+- [x] Verified: two-node mesh with `--site home`, gossip peer discovery, site grouping
 
 ---
 

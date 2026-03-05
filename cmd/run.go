@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/google/uuid"
 	"github.com/dx111ge/homelabmon/configs"
 	"github.com/dx111ge/homelabmon/internal/agent"
@@ -34,6 +36,7 @@ import (
 	"github.com/dx111ge/homelabmon/internal/models"
 	"github.com/dx111ge/homelabmon/internal/plugin"
 	"github.com/dx111ge/homelabmon/internal/store"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -65,6 +68,9 @@ func init() {
 	rootCmd.PersistentFlags().Int("retention-days", 7, "number of days to keep metric history (0 = forever)")
 	rootCmd.PersistentFlags().String("enroll-url", "", "URL of a CA node to enroll with (e.g., https://192.168.1.10:9600)")
 	rootCmd.PersistentFlags().String("enroll-token", "", "one-time enrollment token from the CA node")
+	rootCmd.PersistentFlags().String("site", "", "site label for multi-site federation (e.g., home, office, cloud)")
+
+	viper.BindPFlag("site", rootCmd.PersistentFlags().Lookup("site"))
 
 	viper.BindPFlag("ui", rootCmd.PersistentFlags().Lookup("ui"))
 	viper.BindPFlag("llm", rootCmd.PersistentFlags().Lookup("llm"))
@@ -113,6 +119,8 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("collect host info: %w", err)
 	}
+	site := viper.GetString("site")
+	hostInfo.Site = site
 	if err := st.UpsertHost(ctx, hostInfo); err != nil {
 		return fmt.Errorf("store host info: %w", err)
 	}
@@ -123,6 +131,7 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		BindAddr: viper.GetString("bind"),
 		Version:  Version,
 		DataDir:  dir,
+		Site:     site,
 	}
 
 	log.Info().
@@ -389,25 +398,25 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// 15. Background: metric threshold alerts
-	if dispatcher.HasSenders() {
-		go func() {
-			cpuThreshold := viper.GetFloat64("notify-cpu-threshold")
-			memThreshold := viper.GetFloat64("notify-mem-threshold")
-			diskThreshold := viper.GetFloat64("notify-disk-threshold")
-
-			ticker := time.NewTicker(interval) // check at same rate as collection
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					checkThresholds(ctx, st, dispatcher, cpuThreshold, memThreshold, diskThreshold)
+	// 15. Background: metric threshold alerts (reads thresholds from viper each cycle for hot-reload)
+	go func() {
+		ticker := time.NewTicker(interval) // check at same rate as collection
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !dispatcher.HasSenders() {
+					continue
 				}
+				checkThresholds(ctx, st, dispatcher,
+					viper.GetFloat64("notify-cpu-threshold"),
+					viper.GetFloat64("notify-mem-threshold"),
+					viper.GetFloat64("notify-disk-threshold"))
 			}
-		}()
-	}
+		}
+	}()
 
 	// 16. Background: integration auto-sync every 5 minutes
 	go func() {
@@ -425,6 +434,34 @@ func runAgent(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}()
+
+	// 17. Config hot-reload: react to config.yaml changes at runtime
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		log.Info().Str("file", e.Name).Msg("config file changed, applying updates")
+
+		// Update log level
+		if lvl, err := zerolog.ParseLevel(viper.GetString("log-level")); err == nil && lvl != zerolog.NoLevel {
+			zerolog.SetGlobalLevel(lvl)
+			log.Info().Str("level", lvl.String()).Msg("log level updated")
+		}
+
+		// Rebuild notification senders
+		var senders []notify.Sender
+		if url := viper.GetString("notify-ntfy"); url != "" {
+			senders = append(senders, notify.NewNtfySender(url))
+		}
+		if url := viper.GetString("notify-webhook"); url != "" {
+			senders = append(senders, notify.NewWebhookSender(url))
+		}
+		dispatcher.SetSenders(senders)
+
+		log.Info().
+			Int("retention_days", viper.GetInt("retention-days")).
+			Float64("cpu_threshold", viper.GetFloat64("notify-cpu-threshold")).
+			Float64("mem_threshold", viper.GetFloat64("notify-mem-threshold")).
+			Float64("disk_threshold", viper.GetFloat64("notify-disk-threshold")).
+			Msg("config reloaded")
+	})
 
 	log.Info().Str("bind", bindAddr).Bool("ui", viper.GetBool("ui")).Msg("homelabmon running")
 

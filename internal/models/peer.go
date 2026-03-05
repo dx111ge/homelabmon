@@ -8,6 +8,7 @@ type NodeIdentity struct {
 	BindAddr string `json:"bind_addr"`
 	Version  string `json:"version"`
 	DataDir  string `json:"-"`
+	Site     string `json:"site,omitempty"`
 }
 
 type PeerInfo struct {
@@ -18,15 +19,24 @@ type PeerInfo struct {
 	Status        string     `json:"status"`
 	Version       string     `json:"version"`
 	EnrolledAt    time.Time  `json:"enrolled_at"`
+	Site          string     `json:"site,omitempty"`
+}
+
+// PeerAddr is a lightweight peer reference exchanged in heartbeats for gossip discovery.
+type PeerAddr struct {
+	ID      string `json:"id"`
+	Address string `json:"address"`
+	Site    string `json:"site,omitempty"`
 }
 
 type Heartbeat struct {
-	NodeID    string           `json:"node_id"`
-	Hostname  string           `json:"hostname"`
-	Version   string           `json:"version"`
-	Timestamp time.Time        `json:"timestamp"`
-	Host      *Host            `json:"host,omitempty"`
-	Metric    *MetricSnapshot  `json:"metric,omitempty"`
+	NodeID    string              `json:"node_id"`
+	Hostname  string              `json:"hostname"`
+	Version   string              `json:"version"`
+	Site      string              `json:"site,omitempty"`
+	Timestamp time.Time           `json:"timestamp"`
+	Host      *Host               `json:"host,omitempty"`
+	Metric    *MetricSnapshot     `json:"metric,omitempty"`
 	Services  []DiscoveredService `json:"services,omitempty"`
-	Peers     []string         `json:"peers,omitempty"`
+	KnownPeers []PeerAddr         `json:"known_peers,omitempty"`
 }

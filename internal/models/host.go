@@ -22,6 +22,7 @@ type Host struct {
 	MACAddress   string    `json:"mac_address"`
 	Vendor       string    `json:"vendor"`
 	DiscoveredVia string   `json:"discovered_via"` // agent, arp, mdns, snmp, unifi, homeassistant
+	Site         string    `json:"site,omitempty"`
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
 	Status       string    `json:"status"` // online, offline, unknown
