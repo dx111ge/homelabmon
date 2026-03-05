@@ -1,0 +1,207 @@
+{{define "page-content"}}
+<div class="mb-6">
+    <h1 class="text-xl font-semibold flex items-center gap-2">
+        <i class="fa-solid fa-gear text-blue-400"></i>
+        Settings
+    </h1>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Notification Senders -->
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+        <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-bell text-yellow-400"></i>
+            Notifications
+        </h2>
+
+        {{if .Senders}}
+        <div class="space-y-2 mb-4">
+            {{range .Senders}}
+            <div class="flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-circle-check text-green-400"></i>
+                <span class="font-mono text-gray-300">{{.}}</span>
+                <span class="text-xs text-gray-500">active</span>
+            </div>
+            {{end}}
+        </div>
+        <button hx-post="/ui/test-notification" hx-swap="outerHTML"
+            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors">
+            <i class="fa-solid fa-paper-plane mr-1"></i>Send Test
+        </button>
+        {{else}}
+        <div class="text-sm text-gray-500">
+            <p>No notification senders configured.</p>
+            <p class="mt-2 text-xs">Add notifications with CLI flags:</p>
+            <code class="block mt-2 bg-gray-800 px-3 py-2 rounded text-xs text-gray-300">--notify-ntfy https://ntfy.sh/your-topic</code>
+            <code class="block mt-1 bg-gray-800 px-3 py-2 rounded text-xs text-gray-300">--notify-webhook https://discord.com/api/webhooks/...</code>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Alert Thresholds -->
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+        <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-gauge-high text-orange-400"></i>
+            Alert Thresholds
+        </h2>
+        <div class="space-y-3 text-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">CPU</span>
+                <span class="font-mono text-gray-300">{{printf "%.0f" .CPUThreshold}}%</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Memory</span>
+                <span class="font-mono text-gray-300">{{printf "%.0f" .MemThreshold}}%</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Disk</span>
+                <span class="font-mono text-gray-300">{{printf "%.0f" .DiskThreshold}}%</span>
+            </div>
+        </div>
+        <p class="mt-3 text-[10px] text-gray-600">Configure via <code>--notify-cpu-threshold</code>, <code>--notify-mem-threshold</code>, <code>--notify-disk-threshold</code></p>
+    </div>
+
+    <!-- Node Info -->
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+        <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-circle-info text-blue-400"></i>
+            Node Info
+        </h2>
+        <div class="space-y-2 text-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Node ID</span>
+                <span class="font-mono text-gray-300 text-xs">{{.NodeID}}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Version</span>
+                <span class="font-mono text-gray-300">{{.Version}}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Scanning</span>
+                {{if .ScanEnabled}}<span class="text-green-400">enabled</span>{{else}}<span class="text-gray-500">disabled</span>{{end}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Integrations -->
+<div class="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-5" x-data="integrationManager()">
+    <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
+        <i class="fa-solid fa-plug text-purple-400"></i>
+        Integrations
+    </h2>
+
+    <!-- Existing integrations -->
+    {{range .Integrations}}
+    <div class="flex items-center justify-between bg-gray-800/50 rounded p-3 mb-2">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-router text-gray-400"></i>
+            <div>
+                <div class="text-sm font-medium">{{.Name}}</div>
+                <div class="text-xs text-gray-500">{{.Type}} &middot; {{.Config.url}}</div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {{if eq .Status "ok"}}
+                <span class="text-green-400 text-xs"><i class="fa-solid fa-circle-check"></i></span>
+            {{else if eq .Status "error"}}
+                <span class="text-red-400 text-xs" title="{{.Error}}"><i class="fa-solid fa-circle-xmark"></i></span>
+            {{else}}
+                <span class="text-gray-500 text-xs"><i class="fa-solid fa-circle-question"></i></span>
+            {{end}}
+            <span id="test-{{.ID}}"></span>
+            <button hx-post="/api/v1/integrations/{{.ID}}/test" hx-target="#test-{{.ID}}" hx-swap="innerHTML"
+                class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded">
+                <i class="fa-solid fa-plug"></i> Test
+            </button>
+            <span id="sync-{{.ID}}"></span>
+            <button hx-post="/api/v1/integrations/{{.ID}}/sync" hx-target="#sync-{{.ID}}" hx-swap="innerHTML"
+                class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">
+                <i class="fa-solid fa-rotate"></i> Sync
+            </button>
+            <button onclick="if(confirm('Delete this integration?')) fetch('/api/v1/integrations/{{.ID}}', {method:'DELETE'}).then(() => location.reload())"
+                class="text-xs text-gray-500 hover:text-red-400 px-1">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Add new integration -->
+    <div class="mt-4">
+        <template x-if="!adding">
+            <button @click="adding = true" class="text-sm text-blue-400 hover:text-blue-300">
+                <i class="fa-solid fa-plus mr-1"></i>Add Integration
+            </button>
+        </template>
+        <template x-if="adding">
+            <div class="bg-gray-800/50 rounded p-4 space-y-3">
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">Type</label>
+                    <select x-model="form.type" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <option value="fritzbox">FRITZ!Box (TR-064)</option>
+                        <option value="unifi">Unifi Controller</option>
+                        <option value="homeassistant">Home Assistant</option>
+                        <option value="pihole">Pi-hole</option>
+                        <option value="pfsense">pfSense</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">Name</label>
+                    <input type="text" x-model="form.name" placeholder="My FRITZ!Box"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">URL</label>
+                    <input type="text" x-model="form.url" placeholder="http://192.168.178.1:49000"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">Username</label>
+                    <input type="text" x-model="form.username" placeholder="admin"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">Password</label>
+                    <input type="password" x-model="form.password"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="save()" class="text-sm bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded">
+                        <i class="fa-solid fa-floppy-disk mr-1"></i>Save
+                    </button>
+                    <button @click="adding = false" class="text-sm text-gray-400 hover:text-gray-200 px-3 py-1.5">Cancel</button>
+                    <span x-text="saveMsg" class="text-sm" :class="saveOk ? 'text-green-400' : 'text-red-400'"></span>
+                </div>
+            </div>
+        </template>
+    </div>
+    <p class="mt-3 text-[10px] text-gray-600"><i class="fa-solid fa-lock mr-1"></i>Credentials are encrypted with AES-256-GCM and stored locally.</p>
+</div>
+
+<script>
+function integrationManager() {
+    return {
+        adding: false,
+        form: { type: 'fritzbox', name: '', url: 'http://192.168.178.1:49000', username: 'admin', password: '' },
+        saveMsg: '', saveOk: false,
+        async save() {
+            this.saveMsg = '';
+            const res = await fetch('/api/v1/integrations', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.form)
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                this.saveOk = true;
+                this.saveMsg = 'Saved!';
+                setTimeout(() => location.reload(), 500);
+            } else {
+                this.saveOk = false;
+                this.saveMsg = data.error || 'Failed';
+            }
+        }
+    };
+}
+</script>
+{{end}}

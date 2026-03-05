@@ -1,0 +1,55 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeMonitor{{if .Title}} - {{.Title}}{{end}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="/static/js/app.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="h-full text-gray-100">
+    <nav class="bg-gray-900 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center gap-3">
+                    <a href="/" class="flex items-center gap-2 text-white font-semibold text-lg">
+                        <i class="fa-solid fa-tower-broadcast text-blue-400"></i>
+                        HomeMonitor
+                    </a>
+                    <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{{.Version}}</span>
+                    <a href="/ui/services" class="text-sm text-gray-400 hover:text-gray-200 ml-4"><i class="fa-solid fa-cubes mr-1"></i>Services</a>
+                    <a href="/ui/devices" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-satellite-dish mr-1"></i>Devices</a>
+                    <a href="/ui/chat" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-brain mr-1"></i>Chat</a>
+                    <a href="/ui/settings" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-gear mr-1"></i>Settings</a>
+                </div>
+                <div class="flex items-center gap-4 text-sm text-gray-400">
+                    <span><i class="fa-solid fa-server mr-1"></i>{{.HostCount}} hosts</span>
+                    <span><i class="fa-solid fa-circle text-green-400 text-xs mr-1"></i>{{.OnlineCount}} online</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {{block "page-content" .}}{{end}}
+    </main>
+    <script>
+    function initSparklines() {
+        document.querySelectorAll('.dash-spark:not([data-loaded])').forEach(el => {
+            el.setAttribute('data-loaded', '1');
+            dashSparkline(el, el.dataset.host);
+        });
+    }
+    document.addEventListener('DOMContentLoaded', initSparklines);
+    document.addEventListener('htmx:afterSwap', initSparklines);
+    </script>
+</body>
+</html>
+{{end}}

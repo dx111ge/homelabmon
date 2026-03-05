@@ -1,0 +1,111 @@
+{{define "page-content"}}
+<div hx-get="/ui/dashboard-content" hx-trigger="every 10s" hx-swap="innerHTML">
+    {{template "dashboard-cards" .}}
+</div>
+{{end}}
+
+{{define "dashboard-cards"}}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {{range .Hosts}}
+    <a href="/ui/host/{{.Host.ID}}" class="block bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                {{if eq .Host.OS "linux"}}<i class="fa-brands fa-linux text-gray-400"></i>
+                {{else if eq .Host.OS "darwin"}}<i class="fa-brands fa-apple text-gray-400"></i>
+                {{else if eq .Host.OS "windows"}}<i class="fa-brands fa-windows text-blue-400"></i>
+                {{else}}<i class="fa-solid fa-server text-gray-400"></i>{{end}}
+                <span class="font-medium text-sm truncate">{{hostLabel .Host}}</span>
+            </div>
+            {{if eq .Host.Status "online"}}
+                <span class="flex items-center gap-1 text-xs text-green-400"><i class="fa-solid fa-circle text-[8px]"></i>online</span>
+            {{else if eq .Host.Status "offline"}}
+                <span class="flex items-center gap-1 text-xs text-red-400"><i class="fa-solid fa-circle text-[8px]"></i>offline</span>
+            {{else}}
+                <span class="flex items-center gap-1 text-xs text-gray-500"><i class="fa-solid fa-circle text-[8px]"></i>unknown</span>
+            {{end}}
+        </div>
+
+        {{if .Metric}}
+        <div class="space-y-2">
+            <div>
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>CPU</span>
+                    <span>{{formatPercent .Metric.CPUPercent}}</span>
+                </div>
+                <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full {{percentColor .Metric.CPUPercent}}" style="width: {{clampPercent .Metric.CPUPercent}}%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Memory</span>
+                    <span>{{formatPercent .Metric.MemPercent}}</span>
+                </div>
+                <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full {{percentColor .Metric.MemPercent}}" style="width: {{clampPercent .Metric.MemPercent}}%"></div>
+                </div>
+            </div>
+            {{range .TopDisk}}
+            <div>
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Disk {{.Path}}</span>
+                    <span>{{formatPercent .UsedPercent}}</span>
+                </div>
+                <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full {{percentColor .UsedPercent}}" style="width: {{clampPercent .UsedPercent}}%"></div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        <div class="mt-2 h-8">
+            <canvas class="dash-spark" data-host="{{.Host.ID}}" style="width:100%;height:32px"></canvas>
+        </div>
+        {{if .Services}}
+        <div class="mt-3 flex flex-wrap gap-1">
+            {{range .Services}}
+            <span class="inline-flex items-center gap-1 text-[10px] bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">
+                <i class="{{svcIcon .Category}} text-[8px]"></i>{{.Name}}
+            </span>
+            {{end}}
+        </div>
+        {{end}}
+        <div class="mt-2 text-xs text-gray-500">
+            {{.Host.Platform}} &middot; {{.Host.CPUCores}} cores &middot; {{formatBytes .Host.MemoryTotal}} RAM
+        </div>
+        {{else}}
+        <div class="text-xs text-gray-500 italic">No metrics available</div>
+        {{end}}
+    </a>
+    {{end}}
+
+    {{if not .Hosts}}
+    <div class="col-span-full text-center py-12 text-gray-500">
+        <i class="fa-solid fa-satellite-dish text-4xl mb-3 block"></i>
+        <p>No hosts discovered yet.</p>
+        <p class="text-sm mt-1">This node is collecting metrics. Add peers with <code class="bg-gray-800 px-1 rounded">--peer</code>.</p>
+    </div>
+    {{end}}
+</div>
+
+{{if .PassiveDevices}}
+<div class="mt-6 mb-2 flex items-center gap-2 text-gray-400">
+    <i class="fa-solid fa-satellite-dish"></i>
+    <span class="text-sm font-medium">Network Devices</span>
+    <span class="text-xs text-gray-500">({{len .PassiveDevices}})</span>
+    <a href="/ui/devices" class="text-xs text-blue-400 hover:text-blue-300 ml-auto">View all <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+    {{range .PassiveDevices}}
+    <div class="bg-gray-900 border border-gray-800 rounded px-3 py-2">
+        <div class="flex items-center gap-1.5 mb-1">
+            <i class="{{deviceIcon .DeviceType}} text-gray-500 text-[10px]"></i>
+            <span class="text-xs font-medium truncate">{{hostLabel .}}</span>
+            {{if eq .Status "online"}}<i class="fa-solid fa-circle text-green-400 text-[5px]"></i>{{end}}
+        </div>
+        <div class="text-[10px] text-gray-500 truncate">{{if .IPAddresses}}{{index .IPAddresses 0}}{{end}}</div>
+        {{if .Vendor}}<div class="text-[10px] text-gray-600 truncate">{{.Vendor}}</div>{{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+{{end}}

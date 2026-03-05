@@ -1,0 +1,91 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"time"
+
+	"github.com/dx111ge/homelabmon/internal/models"
+)
+
+// UpsertService inserts or updates a discovered service.
+func (s *Store) UpsertService(ctx context.Context, svc *models.DiscoveredService) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO services (host_id, name, port, protocol, process, category, source, container_id, container_image, status, first_seen, last_seen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+		ON CONFLICT(host_id, port, protocol) DO UPDATE SET
+			name = excluded.name,
+			process = excluded.process,
+			category = excluded.category,
+			source = excluded.source,
+			container_id = excluded.container_id,
+			container_image = excluded.container_image,
+			status = excluded.status,
+			last_seen = datetime('now')
+	`, svc.HostID, svc.Name, svc.Port, svc.Protocol, svc.Process,
+		svc.Category, svc.Source, svc.ContainerID, svc.ContainerImg, svc.Status)
+	return err
+}
+
+// ListServicesByHost returns all active services for a host.
+func (s *Store) ListServicesByHost(ctx context.Context, hostID string) ([]models.DiscoveredService, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, host_id, name, port, protocol, process, category, source,
+		       container_id, container_image, status, first_seen, last_seen
+		FROM services WHERE host_id = ? ORDER BY port
+	`, hostID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanServices(rows)
+}
+
+// ListAllServices returns all services across all hosts.
+func (s *Store) ListAllServices(ctx context.Context) ([]models.DiscoveredService, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, host_id, name, port, protocol, process, category, source,
+		       container_id, container_image, status, first_seen, last_seen
+		FROM services ORDER BY name, port
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanServices(rows)
+}
+
+// ServiceCountByHost returns the count of active services per host.
+func (s *Store) ServiceCountByHost(ctx context.Context, hostID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM services WHERE host_id = ? AND status = 'active'`, hostID).Scan(&count)
+	return count, err
+}
+
+// MarkStaleServicesGone marks services not seen recently as "gone".
+func (s *Store) MarkStaleServicesGone(ctx context.Context, staleAfter time.Duration) error {
+	cutoff := time.Now().UTC().Add(-staleAfter)
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE services SET status = 'gone'
+		WHERE status = 'active' AND last_seen < ?
+	`, cutoff)
+	return err
+}
+
+func scanServices(rows *sql.Rows) ([]models.DiscoveredService, error) {
+	var services []models.DiscoveredService
+	for rows.Next() {
+		var svc models.DiscoveredService
+		err := rows.Scan(
+			&svc.ID, &svc.HostID, &svc.Name, &svc.Port, &svc.Protocol,
+			&svc.Process, &svc.Category, &svc.Source,
+			&svc.ContainerID, &svc.ContainerImg,
+			&svc.Status, &svc.FirstSeen, &svc.LastSeen,
+		)
+		if err != nil {
+			return nil, err
+		}
+		services = append(services, svc)
+	}
+	return services, rows.Err()
+}

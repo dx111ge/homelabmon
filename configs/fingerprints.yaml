@@ -1,0 +1,224 @@
+# HomeMonitor Service Fingerprints
+# Port + process name -> service identification
+# If process is set, both port AND process must match.
+# If process is empty, port alone is sufficient.
+
+fingerprints:
+  # DNS / Ad-blocking
+  - name: pihole
+    ports: [80, 53]
+    process: "pihole-FTL"
+    category: dns
+  - name: adguard-home
+    ports: [3000, 53]
+    process: "AdGuardHome"
+    category: dns
+
+  # Home Automation
+  - name: home-assistant
+    ports: [8123]
+    category: automation
+  - name: node-red
+    ports: [1880]
+    category: automation
+  - name: openhab
+    ports: [8080]
+    process: "openhab"
+    category: automation
+
+  # Media
+  - name: plex
+    ports: [32400]
+    process: "Plex Media Server"
+    category: media
+  - name: jellyfin
+    ports: [8096]
+    category: media
+  - name: emby
+    ports: [8096]
+    process: "EmbyServer"
+    category: media
+  - name: sonarr
+    ports: [8989]
+    category: media
+  - name: radarr
+    ports: [7878]
+    category: media
+  - name: prowlarr
+    ports: [9696]
+    category: media
+  - name: lidarr
+    ports: [8686]
+    category: media
+  - name: overseerr
+    ports: [5055]
+    category: media
+  - name: tautulli
+    ports: [8181]
+    category: media
+  - name: transmission
+    ports: [9091]
+    category: download
+  - name: qbittorrent
+    ports: [8080]
+    process: "qbittorrent"
+    category: download
+  - name: sabnzbd
+    ports: [8085]
+    category: download
+
+  # Web / Proxy
+  - name: nginx
+    ports: [80, 443]
+    process: "nginx"
+    category: web
+  - name: apache
+    ports: [80, 443]
+    process: "httpd"
+    category: web
+  - name: traefik
+    ports: [8080, 443]
+    process: "traefik"
+    category: proxy
+  - name: caddy
+    ports: [80, 443]
+    process: "caddy"
+    category: proxy
+  - name: haproxy
+    ports: [80, 443]
+    process: "haproxy"
+    category: proxy
+  - name: npm
+    ports: [81]
+    category: proxy
+
+  # Database
+  - name: postgresql
+    ports: [5432]
+    process: "postgres"
+    category: database
+  - name: mysql
+    ports: [3306]
+    process: "mysqld"
+    category: database
+  - name: mariadb
+    ports: [3306]
+    process: "mariadbd"
+    category: database
+  - name: mongodb
+    ports: [27017]
+    process: "mongod"
+    category: database
+  - name: influxdb
+    ports: [8086]
+    process: "influxd"
+    category: database
+
+  # Cache / Queue
+  - name: redis
+    ports: [6379]
+    process: "redis-server"
+    category: cache
+  - name: valkey
+    ports: [6379]
+    process: "valkey-server"
+    category: cache
+  - name: rabbitmq
+    ports: [5672]
+    process: "rabbitmq"
+    category: cache
+
+  # MQTT
+  - name: mosquitto
+    ports: [1883]
+    process: "mosquitto"
+    category: mqtt
+  - name: emqx
+    ports: [1883]
+    process: "emqx"
+    category: mqtt
+
+  # Monitoring
+  - name: grafana
+    ports: [3000]
+    process: "grafana"
+    category: monitoring
+  - name: prometheus
+    ports: [9090]
+    process: "prometheus"
+    category: monitoring
+  - name: netdata
+    ports: [19999]
+    category: monitoring
+  - name: uptime-kuma
+    ports: [3001]
+    category: monitoring
+  - name: zabbix
+    ports: [10051]
+    process: "zabbix_server"
+    category: monitoring
+
+  # Containers
+  - name: docker
+    ports: [2375, 2376]
+    category: container
+  - name: portainer
+    ports: [9000, 9443]
+    category: container
+
+  # Network
+  - name: unifi-controller
+    ports: [8443]
+    category: network
+  - name: pihole-dns
+    ports: [53]
+    process: "pihole-FTL"
+    category: dns
+
+  # Sync / Backup
+  - name: syncthing
+    ports: [8384]
+    category: sync
+  - name: nextcloud
+    ports: [443, 80]
+    process: "nextcloud"
+    category: sync
+  - name: restic-server
+    ports: [8000]
+    process: "rest-server"
+    category: sync
+
+  # Remote Access
+  - name: ssh
+    ports: [22]
+    process: "sshd"
+    category: remote-access
+  - name: wireguard
+    ports: [51820]
+    category: remote-access
+  - name: tailscale
+    ports: [41641]
+    process: "tailscaled"
+    category: remote-access
+
+  # AI
+  - name: ollama
+    ports: [11434]
+    category: ai
+  - name: open-webui
+    ports: [3000, 8080]
+    process: "open-webui"
+    category: ai
+
+  # Misc
+  - name: vaultwarden
+    ports: [8080]
+    process: "vaultwarden"
+    category: remote-access
+  - name: gitea
+    ports: [3000]
+    process: "gitea"
+    category: web
+  - name: minecraft
+    ports: [25565]
+    category: media

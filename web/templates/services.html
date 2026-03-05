@@ -1,0 +1,57 @@
+{{define "page-content"}}
+<div class="mb-6">
+    <h1 class="text-xl font-semibold"><i class="fa-solid fa-cubes mr-2 text-gray-400"></i>All Services</h1>
+    <p class="text-sm text-gray-400 mt-1">{{len .Services}} services discovered across {{.HostCount}} hosts</p>
+</div>
+
+{{if .Services}}
+<div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-gray-800 text-gray-400 text-xs uppercase">
+                <th class="text-left px-4 py-3">Service</th>
+                <th class="text-left px-4 py-3">Host</th>
+                <th class="text-left px-4 py-3">Port</th>
+                <th class="text-left px-4 py-3">Source</th>
+                <th class="text-left px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800/50">
+            {{range .Services}}
+            <tr class="hover:bg-gray-800/30">
+                <td class="px-4 py-2.5">
+                    <div class="flex items-center gap-2">
+                        <i class="{{svcIcon .Category}} text-gray-400"></i>
+                        <span class="font-medium">{{.Name}}</span>
+                        <span class="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{{.Category}}</span>
+                    </div>
+                </td>
+                <td class="px-4 py-2.5">
+                    {{$hostname := index $.Hosts .HostID}}
+                    <a href="/ui/host/{{.HostID}}" class="text-blue-400 hover:text-blue-300">{{$hostname}}</a>
+                </td>
+                <td class="px-4 py-2.5 font-mono text-gray-400">{{.Port}}/{{.Protocol}}</td>
+                <td class="px-4 py-2.5 text-gray-400">
+                    {{if eq .Source "docker"}}<i class="fa-brands fa-docker text-blue-400 mr-1"></i>{{end}}
+                    {{.Source}}
+                </td>
+                <td class="px-4 py-2.5">
+                    {{if eq .Status "active"}}
+                    <span class="text-green-400 text-xs"><i class="fa-solid fa-circle text-[6px] mr-1"></i>active</span>
+                    {{else}}
+                    <span class="text-gray-500 text-xs"><i class="fa-solid fa-circle text-[6px] mr-1"></i>{{.Status}}</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div class="text-center py-12 text-gray-500">
+    <i class="fa-solid fa-cubes text-4xl mb-3 block"></i>
+    <p>No services discovered yet.</p>
+    <p class="text-sm mt-1">Services will appear after the first discovery cycle (~60 seconds).</p>
+</div>
+{{end}}
+{{end}}

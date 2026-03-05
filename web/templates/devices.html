@@ -1,0 +1,133 @@
+{{define "page-content"}}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-satellite-dish text-blue-400"></i>
+            Network Devices
+            <span class="text-sm font-normal text-gray-500">({{len .Devices}} discovered)</span>
+        </h1>
+        <p class="text-sm text-gray-500 mt-1">Passively discovered devices on your network via ARP, mDNS, and OUI lookup.</p>
+    </div>
+    {{if .ScanEnabled}}
+    <div class="flex items-center gap-2">
+        <div id="oui-result"></div>
+        <button hx-post="/api/v1/oui-check" hx-target="#oui-result" hx-swap="innerHTML"
+            class="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded flex items-center gap-1.5">
+            <i class="fa-solid fa-magnifying-glass"></i>Check MAC Vendors
+        </button>
+    </div>
+    {{end}}
+</div>
+
+{{if .ScanEnabled}}
+<div hx-get="/ui/devices-content" hx-trigger="every 30s" hx-swap="innerHTML">
+    {{template "devices-grid" .}}
+</div>
+{{else}}
+<div class="text-center py-16 text-gray-500">
+    <i class="fa-solid fa-radar text-4xl mb-4 block text-gray-600"></i>
+    <p class="text-lg">Network scanning is disabled</p>
+    <p class="text-sm mt-2">Start homemon with <code class="bg-gray-800 px-2 py-0.5 rounded text-gray-300">--scan</code> to discover network devices.</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "devices-grid"}}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+    {{range .Devices}}
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-4" x-data="{editing: false, name: '{{.Label}}', devType: '{{.DeviceType}}', deleted: false}">
+        <template x-if="!deleted">
+        <div>
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+                <i class="{{deviceIcon .DeviceType}} text-gray-400 flex-shrink-0"></i>
+                <template x-if="!editing">
+                    <span class="font-medium text-sm truncate cursor-pointer hover:text-blue-400"
+                        @click="editing = true" title="Click to rename">{{.Label}}</span>
+                </template>
+                <template x-if="editing">
+                    <input type="text" x-model="name" @keydown.enter="
+                        fetch('/api/v1/hosts/{{.ID}}/rename', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name: name})})
+                        .then(() => { editing = false; });
+                    " @keydown.escape="editing = false" x-init="$nextTick(() => $el.focus())"
+                        class="bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-sm text-white w-full focus:outline-none focus:border-blue-500">
+                </template>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button @click="editing = !editing" class="text-gray-600 hover:text-gray-400 text-xs" title="Rename">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button @click="if(confirm('Delete this device?')) fetch('/api/v1/hosts/{{.ID}}', {method:'DELETE'}).then(r => { if(r.ok) deleted = true; })" class="text-gray-600 hover:text-red-400 text-xs" title="Delete">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+                {{if eq .Status "online"}}
+                    <span class="flex items-center gap-1 text-xs text-green-400"><i class="fa-solid fa-circle text-[8px]"></i></span>
+                {{else}}
+                    <span class="flex items-center gap-1 text-xs text-gray-500"><i class="fa-solid fa-circle text-[8px]"></i></span>
+                {{end}}
+            </div>
+        </div>
+        <div class="mb-2">
+            <select x-model="devType" @change="fetch('/api/v1/hosts/{{.ID}}/type', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({device_type: devType})})"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500">
+                <option value="other">Other</option>
+                <option value="server">Server</option>
+                <option value="desktop">Desktop</option>
+                <option value="laptop">Laptop</option>
+                <option value="phone">Phone</option>
+                <option value="tablet">Tablet</option>
+                <option value="tv">TV</option>
+                <option value="media">Media</option>
+                <option value="printer">Printer</option>
+                <option value="camera">Camera</option>
+                <option value="router">Router</option>
+                <option value="switch">Switch</option>
+                <option value="ap">Access Point</option>
+                <option value="nas">NAS</option>
+                <option value="iot">IoT</option>
+            </select>
+        </div>
+        <div class="space-y-1 text-xs text-gray-400">
+            {{if .IPAddresses}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-network-wired w-4 text-center"></i>
+                <span>{{index .IPAddresses 0}}</span>
+            </div>
+            {{end}}
+            {{if .MACAddress}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-barcode w-4 text-center"></i>
+                <span class="font-mono">{{.MACAddress}}</span>
+            </div>
+            {{end}}
+            {{if .Vendor}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-industry w-4 text-center"></i>
+                <span>{{.Vendor}}</span>
+            </div>
+            {{end}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-eye w-4 text-center"></i>
+                <span>via {{.DiscoveredVia}}</span>
+            </div>
+        </div>
+        <div class="mt-2 text-[10px] text-gray-600">
+            First seen: {{formatTime .FirstSeen}} &middot; Last: {{formatTime .LastSeen}}
+        </div>
+        </div>
+        </template>
+        <template x-if="deleted">
+            <div class="text-center text-gray-500 text-sm py-4"><i class="fa-solid fa-check mr-1"></i>Deleted</div>
+        </template>
+    </div>
+    {{end}}
+
+    {{if not .Devices}}
+    <div class="col-span-full text-center py-12 text-gray-500">
+        <i class="fa-solid fa-magnifying-glass text-4xl mb-3 block"></i>
+        <p>No devices discovered yet.</p>
+        <p class="text-sm mt-1">Scanning is active. Devices will appear as they are detected on the network.</p>
+    </div>
+    {{end}}
+</div>
+{{end}}

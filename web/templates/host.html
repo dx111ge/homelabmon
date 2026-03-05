@@ -1,0 +1,157 @@
+{{define "page-content"}}
+<div class="mb-4">
+    <a href="/" class="text-sm text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-arrow-left mr-1"></i>Back to dashboard
+    </a>
+</div>
+
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+            {{if eq .Host.OS "linux"}}<i class="fa-brands fa-linux text-2xl text-gray-400"></i>
+            {{else if eq .Host.OS "darwin"}}<i class="fa-brands fa-apple text-2xl text-gray-400"></i>
+            {{else if eq .Host.OS "windows"}}<i class="fa-brands fa-windows text-2xl text-blue-400"></i>
+            {{else}}<i class="fa-solid fa-server text-2xl text-gray-400"></i>{{end}}
+            <div>
+                <h1 class="text-xl font-semibold">{{hostLabel .Host}}</h1>
+                <p class="text-sm text-gray-400">{{.Host.Platform}} &middot; {{.Host.Arch}} &middot; Kernel {{.Host.Kernel}}</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {{if eq .Host.Status "online"}}
+                <span class="flex items-center gap-1.5 text-sm text-green-400 bg-green-400/10 px-3 py-1 rounded-full">
+                    <i class="fa-solid fa-circle text-[8px]"></i>Online
+                </span>
+            {{else}}
+                <span class="flex items-center gap-1.5 text-sm text-red-400 bg-red-400/10 px-3 py-1 rounded-full">
+                    <i class="fa-solid fa-circle text-[8px]"></i>Offline
+                </span>
+            {{end}}
+            <button onclick="if(confirm('Delete this host and all its data?')) fetch('/api/v1/hosts/{{.Host.ID}}', {method:'DELETE'}).then(r => { if(r.ok) window.location='/' })"
+                class="text-gray-600 hover:text-red-400 text-sm px-2 py-1 rounded" title="Delete host">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div class="bg-gray-800/50 rounded p-3">
+            <div class="text-gray-400 text-xs mb-1">CPU</div>
+            <div class="font-medium">{{.Host.CPUModel}}</div>
+            <div class="text-gray-400">{{.Host.CPUCores}} cores</div>
+        </div>
+        <div class="bg-gray-800/50 rounded p-3">
+            <div class="text-gray-400 text-xs mb-1">Memory</div>
+            <div class="font-medium">{{formatBytes .Host.MemoryTotal}}</div>
+        </div>
+        <div class="bg-gray-800/50 rounded p-3">
+            <div class="text-gray-400 text-xs mb-1">IP Addresses</div>
+            {{range .Host.IPAddresses}}<div class="font-mono text-xs">{{.}}</div>{{end}}
+        </div>
+        <div class="bg-gray-800/50 rounded p-3">
+            <div class="text-gray-400 text-xs mb-1">First Seen</div>
+            <div class="font-medium">{{formatTime .Host.FirstSeen}}</div>
+        </div>
+    </div>
+</div>
+
+{{if .Metric}}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" hx-get="/ui/host/{{.Host.ID}}/metrics" hx-trigger="every 10s" hx-swap="innerHTML">
+    {{template "metric-cards" .}}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6" x-data="hostCharts('{{.Host.ID}}')" x-init="load()">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-1">
+            <h3 class="text-xs font-medium text-gray-400"><i class="fa-solid fa-microchip mr-1"></i>CPU</h3>
+            <div class="flex gap-1">
+                <template x-for="h in [1,6,24,72,168]">
+                    <button @click="hours=h; load()" :class="hours===h ? 'bg-blue-500/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'"
+                        class="text-[10px] px-1.5 py-0.5 rounded" x-text="h < 24 ? h+'h' : (h/24)+'d'"></button>
+                </template>
+            </div>
+        </div>
+        <div style="height:100px"><canvas id="cpuChart"></canvas></div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <h3 class="text-xs font-medium text-gray-400 mb-1"><i class="fa-solid fa-memory mr-1"></i>Memory</h3>
+        <div style="height:100px"><canvas id="memChart"></canvas></div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <h3 class="text-xs font-medium text-gray-400 mb-1"><i class="fa-solid fa-gauge mr-1"></i>Load</h3>
+        <div style="height:100px"><canvas id="loadChart"></canvas></div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
+        <h3 class="text-xs font-medium text-gray-400 mb-1"><i class="fa-solid fa-network-wired mr-1"></i>Network</h3>
+        <div style="height:100px"><canvas id="netChart"></canvas></div>
+    </div>
+</div>
+{{end}}
+
+{{if .Services}}
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
+    <h2 class="text-lg font-semibold mb-4"><i class="fa-solid fa-cubes mr-2 text-gray-400"></i>Discovered Services ({{len .Services}})</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {{range .Services}}
+        <div class="flex items-center gap-3 bg-gray-800/50 rounded p-3">
+            <i class="{{svcIcon .Category}} text-lg text-gray-400 w-6 text-center"></i>
+            <div class="min-w-0 flex-1">
+                <div class="font-medium text-sm truncate">{{.Name}}</div>
+                <div class="text-xs text-gray-400">
+                    :{{.Port}}/{{.Protocol}}
+                    {{if .ContainerImg}}<span class="text-blue-400 ml-1"><i class="fa-brands fa-docker"></i> {{.ContainerImg}}</span>{{end}}
+                    {{if and .Process (not .ContainerImg)}}<span class="ml-1">{{.Process}}</span>{{end}}
+                </div>
+            </div>
+            {{if eq .Status "active"}}
+            <span class="text-green-400 text-xs"><i class="fa-solid fa-circle text-[6px]"></i></span>
+            {{else}}
+            <span class="text-gray-600 text-xs"><i class="fa-solid fa-circle text-[6px]"></i></span>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <h2 class="text-lg font-semibold mb-4"><i class="fa-solid fa-hard-drive mr-2 text-gray-400"></i>Disk Usage</h2>
+    {{if .Disks}}
+    <div class="space-y-3">
+        {{range .Disks}}
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="font-mono">{{.Path}}</span>
+                <span class="text-gray-400">{{formatBytes .Used}} / {{formatBytes .Total}} ({{formatPercent .UsedPercent}})</span>
+            </div>
+            <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div class="h-full rounded-full {{percentColor .UsedPercent}}" style="width: {{clampPercent .UsedPercent}}%"></div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <p class="text-gray-500 text-sm">No disk data available</p>
+    {{end}}
+</div>
+{{end}}
+
+{{define "metric-cards"}}
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+    <div class="text-3xl font-bold {{percentColor .Metric.CPUPercent}}">{{formatPercent .Metric.CPUPercent}}</div>
+    <div class="text-xs text-gray-400 mt-1">CPU Usage</div>
+    <div class="text-xs text-gray-500">Load: {{printf "%.2f" .Metric.Load1}} / {{printf "%.2f" .Metric.Load5}} / {{printf "%.2f" .Metric.Load15}}</div>
+</div>
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+    <div class="text-3xl font-bold {{percentColor .Metric.MemPercent}}">{{formatPercent .Metric.MemPercent}}</div>
+    <div class="text-xs text-gray-400 mt-1">Memory</div>
+    <div class="text-xs text-gray-500">{{formatBytes .Metric.MemUsed}} / {{formatBytes .Metric.MemTotal}}</div>
+</div>
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+    <div class="text-3xl font-bold text-blue-400">
+        <i class="fa-solid fa-arrow-up text-sm"></i> {{formatBytes .Metric.NetBytesSent}}
+        <i class="fa-solid fa-arrow-down text-sm ml-2"></i> {{formatBytes .Metric.NetBytesRecv}}
+    </div>
+    <div class="text-xs text-gray-400 mt-1">Network I/O (interval)</div>
+</div>
+{{end}}
