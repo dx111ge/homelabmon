@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/json"
 	"encoding/pem"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -85,12 +86,21 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		t.store.UpsertService(r.Context(), &hb.Services[i])
 	}
 
-	// Update peer record
+	// Update peer record — use the sender's announced listening address,
+	// falling back to the remote IP with the announced port.
+	peerAddr := hb.Address
+	if peerAddr == "" {
+		peerAddr = r.RemoteAddr // legacy fallback
+	} else if peerAddr[0] == ':' {
+		// Sender only sent ":9600", prepend the remote IP
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		peerAddr = net.JoinHostPort(host, peerAddr[1:])
+	}
 	now := time.Now().UTC()
 	t.store.UpsertPeer(r.Context(), &models.PeerInfo{
 		ID:            hb.NodeID,
 		Hostname:      hb.Hostname,
-		Address:       r.RemoteAddr,
+		Address:       peerAddr,
 		LastHeartbeat: &now,
 		Status:        "online",
 		Version:       hb.Version,
@@ -119,9 +129,13 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	allSvcs, _ := t.store.ListServicesByHost(r.Context(), t.identity.ID)
 	var mySvcs []models.DiscoveredService
 	for _, s := range allSvcs {
-		if s.Status == "active" && s.Category != "unknown" {
-			mySvcs = append(mySvcs, s)
+		if s.Status != "active" {
+			continue
 		}
+		if s.Category == "unknown" && s.Name == "unknown" {
+			continue
+		}
+		mySvcs = append(mySvcs, s)
 	}
 	myPeers, _ := t.store.ListPeers(r.Context())
 	var knownPeers []models.PeerAddr
@@ -135,6 +149,7 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	myHB := models.Heartbeat{
 		NodeID:     t.identity.ID,
 		Hostname:   t.identity.Hostname,
+		Address:    t.identity.BindAddr,
 		Version:    t.identity.Version,
 		Site:       t.identity.Site,
 		Timestamp:  time.Now().UTC(),

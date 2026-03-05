@@ -88,13 +88,18 @@ func (h *HeartbeatService) sendHeartbeats(ctx context.Context) {
 
 	host, _ := h.store.GetHost(ctx, h.identity.ID)
 
-	// Include active known services (exclude unknown port scans)
+	// Include active services: named services + docker + fingerprinted.
+	// Exclude unnamed port scan results (name="unknown").
 	allSvcs, _ := h.store.ListServicesByHost(ctx, h.identity.ID)
 	var svcs []models.DiscoveredService
 	for _, s := range allSvcs {
-		if s.Status == "active" && s.Category != "unknown" {
-			svcs = append(svcs, s)
+		if s.Status != "active" {
+			continue
 		}
+		if s.Category == "unknown" && s.Name == "unknown" {
+			continue
+		}
+		svcs = append(svcs, s)
 	}
 
 	// Build known peer addresses for gossip
@@ -110,6 +115,7 @@ func (h *HeartbeatService) sendHeartbeats(ctx context.Context) {
 	hb := models.Heartbeat{
 		NodeID:     h.identity.ID,
 		Hostname:   h.identity.Hostname,
+		Address:    h.identity.BindAddr,
 		Version:    h.identity.Version,
 		Site:       h.identity.Site,
 		Timestamp:  time.Now().UTC(),

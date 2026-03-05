@@ -389,16 +389,16 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// 14. Background: mark stale hosts offline every 2 minutes + notify
+	// 14. Background: mark stale hosts offline if 2 heartbeats missed (~2.5 min) + notify
 	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
+		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				stale, _ := st.MarkStaleHostsOffline(ctx, 5*time.Minute)
+				stale, _ := st.MarkStaleHostsOffline(ctx, 150*time.Second)
 				for _, h := range stale {
 					log.Warn().Str("host", h.Hostname).Msg("host went offline")
 					dispatcher.Send(notify.FormatHostOffline(h.ID, h.Hostname))

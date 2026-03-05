@@ -32,6 +32,7 @@ type PeerAddr struct {
 type Heartbeat struct {
 	NodeID    string              `json:"node_id"`
 	Hostname  string              `json:"hostname"`
+	Address   string              `json:"address,omitempty"` // sender's listening address (host:port)
 	Version   string              `json:"version"`
 	Site      string              `json:"site,omitempty"`
 	Timestamp time.Time           `json:"timestamp"`

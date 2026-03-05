@@ -68,7 +68,8 @@ func (e *Engine) Discover(ctx context.Context) {
 		}
 	}
 
-	// Also store unmatched listening ports as "unknown" services (only well-known ports < 49152)
+	// Also store unmatched listening ports as services (only ports < 49152).
+	// Use well-known port names as fallback when process name is empty.
 	matched := make(map[int]bool)
 	for _, m := range matches {
 		matched[m.MatchedPort] = true
@@ -77,26 +78,69 @@ func (e *Engine) Discover(ctx context.Context) {
 		if matched[int(lp.Port)] || lp.Port >= 49152 {
 			continue
 		}
+		name := lp.Process
+		category := "unknown"
+		if name == "" {
+			if wk, ok := wellKnownPorts[lp.Port]; ok {
+				name = wk.Name
+				category = wk.Category
+			} else {
+				name = "unknown"
+			}
+		}
 		svc := &models.DiscoveredService{
 			HostID:   e.hostID,
-			Name:     lp.Process,
+			Name:     name,
 			Port:     lp.Port,
 			Protocol: lp.Proto,
 			Process:  lp.Process,
-			Category: "unknown",
+			Category: category,
 			Source:   "portscan",
 			Status:   "active",
 			LastSeen: now,
-		}
-		if svc.Name == "" {
-			svc.Name = "unknown"
 		}
 		if err := e.store.UpsertService(ctx, svc); err != nil {
 			log.Warn().Err(err).Int("port", svc.Port).Msg("failed to store unknown service")
 		}
 	}
 
-	if len(matches) > 0 {
-		log.Info().Int("matched", len(matches)).Int("ports", len(ports)).Msg("service discovery complete")
-	}
+	log.Info().Int("matched", len(matches)).Int("ports", len(ports)).Msg("service discovery complete")
+}
+
+// wellKnownPort maps a port number to a human-readable name and category.
+type wellKnownPort struct {
+	Name     string
+	Category string
+}
+
+// wellKnownPorts provides fallback names for common ports when process name is unavailable.
+var wellKnownPorts = map[int]wellKnownPort{
+	22:    {"ssh", "remote-access"},
+	25:    {"smtp", "mail"},
+	53:    {"dns", "dns"},
+	80:    {"http", "web"},
+	110:   {"pop3", "mail"},
+	111:   {"rpcbind", "system"},
+	143:   {"imap", "mail"},
+	443:   {"https", "web"},
+	445:   {"smb", "file-sharing"},
+	465:   {"smtps", "mail"},
+	548:   {"afp", "file-sharing"},
+	587:   {"smtp-submission", "mail"},
+	631:   {"ipp", "printing"},
+	993:   {"imaps", "mail"},
+	995:   {"pop3s", "mail"},
+	1194:  {"openvpn", "remote-access"},
+	1883:  {"mqtt", "mqtt"},
+	2049:  {"nfs", "file-sharing"},
+	3306:  {"mysql", "database"},
+	3389:  {"rdp", "remote-access"},
+	5353:  {"mdns", "dns"},
+	5432:  {"postgresql", "database"},
+	5900:  {"vnc", "remote-access"},
+	6379:  {"redis", "cache"},
+	8080:  {"http-alt", "web"},
+	8443:  {"https-alt", "web"},
+	9090:  {"prometheus", "monitoring"},
+	27017: {"mongodb", "database"},
 }
