@@ -39,9 +39,9 @@
         .help-tip:hover::after { opacity: 1; }
     </style>
 </head>
-<body class="h-full text-gray-100">
-    <nav class="bg-gray-900 border-b border-gray-800">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<body class="h-full text-gray-100" x-data="chatPanel()" x-init="init()">
+    <nav class="bg-gray-900 border-b border-gray-800 relative z-30">
+        <div class="px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-14">
                 <div class="flex items-center gap-3">
                     <a href="/" class="flex items-center gap-2 text-white font-semibold text-lg">
@@ -51,14 +51,17 @@
                     <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{{.Version}}</span>
                     <a href="/ui/services" class="text-sm text-gray-400 hover:text-gray-200 ml-4"><i class="fa-solid fa-cubes mr-1"></i>Services</a>
                     <a href="/ui/devices" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-satellite-dish mr-1"></i>Devices</a>
-                    <a href="/ui/chat" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-brain mr-1"></i>Chat</a>
                     <a href="/ui/settings" class="text-sm text-gray-400 hover:text-gray-200 ml-2"><i class="fa-solid fa-gear mr-1"></i>Settings</a>
                 </div>
                 <div class="flex items-center gap-4 text-sm text-gray-400">
                     <span><i class="fa-solid fa-server mr-1"></i>{{.HostCount}} hosts</span>
                     <span><i class="fa-solid fa-circle text-green-400 text-xs mr-1"></i>{{.OnlineCount}} online</span>
+                    <button @click="side = side === 'right' ? 'left' : 'right'; saveSide()"
+                        class="text-gray-500 hover:text-gray-300 px-1" title="Move chat to other side">
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                    </button>
                     <form method="POST" action="/ui/logout" class="inline">
-                        <button type="submit" class="text-gray-500 hover:text-gray-300 ml-2" title="Sign out">
+                        <button type="submit" class="text-gray-500 hover:text-gray-300" title="Sign out">
                             <i class="fa-solid fa-right-from-bracket"></i>
                         </button>
                     </form>
@@ -66,10 +69,198 @@
             </div>
         </div>
     </nav>
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {{block "page-content" .}}{{end}}
-    </main>
+
+    <div class="flex h-[calc(100vh-3.5rem)]" :class="side === 'left' ? 'flex-row-reverse' : 'flex-row'">
+        <!-- Main content -->
+        <main class="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+            {{block "page-content" .}}{{end}}
+        </main>
+
+        <!-- Chat Sidebar (always visible) -->
+        <aside class="w-80 xl:w-96 flex-shrink-0 flex flex-col bg-gray-900 border-gray-800"
+            :class="side === 'left' ? 'border-r' : 'border-l'">
+
+            <!-- Chat Header -->
+            <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-brain text-purple-400 text-sm"></i>
+                    <span class="text-xs font-semibold">AI Chat</span>
+                    <span class="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded" x-text="model"></span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="text-[10px] mr-1" :class="connected ? 'text-green-400' : 'text-red-400'">
+                        <i class="fa-solid fa-circle"></i>
+                    </span>
+                    <button @click="clearChat()"
+                        class="text-gray-500 hover:text-gray-300 px-1 py-0.5 text-xs" title="Clear chat">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="flex-1 overflow-y-auto px-3 py-3 space-y-3" x-ref="messages">
+                <template x-if="messages.length === 0 && !loading">
+                    <div class="flex flex-col items-center justify-center h-full text-gray-500">
+                        <i class="fa-solid fa-comments text-3xl mb-3 text-gray-700"></i>
+                        <p class="text-sm mb-3">Ask about your homelab</p>
+                        <div class="space-y-1.5 w-full">
+                            <button @click="sendSuggestion('What hosts are online?')"
+                                class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs text-left">
+                                <i class="fa-solid fa-server mr-1 text-blue-400"></i>What hosts are online?
+                            </button>
+                            <button @click="sendSuggestion('Show me all Docker containers')"
+                                class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs text-left">
+                                <i class="fa-brands fa-docker mr-1 text-blue-400"></i>Show Docker containers
+                            </button>
+                            <button @click="sendSuggestion('Any disk issues?')"
+                                class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs text-left">
+                                <i class="fa-solid fa-hard-drive mr-1 text-yellow-400"></i>Any disk issues?
+                            </button>
+                            <button @click="sendSuggestion('Give me a homelab summary')"
+                                class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs text-left">
+                                <i class="fa-solid fa-chart-pie mr-1 text-green-400"></i>Homelab summary
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-for="(msg, index) in messages" :key="index">
+                    <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                        <div :class="msg.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-lg rounded-br-none px-3 py-2 max-w-[85%]'
+                            : 'bg-gray-800 text-gray-100 rounded-lg rounded-bl-none px-3 py-2 max-w-[85%]'">
+                            <div class="text-[10px] text-gray-400 mb-0.5" x-show="msg.role !== 'user'">
+                                <i class="fa-solid fa-brain mr-0.5 text-purple-400"></i>AI
+                            </div>
+                            <div class="whitespace-pre-wrap text-xs leading-relaxed" x-html="formatMessage(msg.content)"></div>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="loading">
+                    <div class="flex justify-start">
+                        <div class="bg-gray-800 text-gray-400 rounded-lg rounded-bl-none px-3 py-2">
+                            <div class="flex items-center gap-2 text-xs">
+                                <i class="fa-solid fa-spinner fa-spin text-purple-400"></i>
+                                Thinking...
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="px-3 py-2 border-t border-gray-800">
+                <form @submit.prevent="sendMessage()" class="flex gap-1.5">
+                    <input x-model="input" type="text" placeholder="Ask about your homelab..."
+                        class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                        :disabled="loading || !connected"
+                        x-ref="chatInput">
+                    <button type="submit"
+                        class="bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-3 py-1.5 rounded-lg text-xs"
+                        :disabled="loading || !input.trim() || !connected">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </aside>
+    </div>
+
     <script>
+    function chatPanel() {
+        return {
+            side: localStorage.getItem('hlm-chat-side') || 'right',
+            messages: [],
+            input: '',
+            loading: false,
+            connected: false,
+            model: '',
+            sessionId: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+
+            init() {
+                this.checkConnection();
+            },
+
+            saveSide() {
+                localStorage.setItem('hlm-chat-side', this.side);
+            },
+
+            async checkConnection() {
+                try {
+                    const resp = await fetch('/api/v1/llm/status');
+                    const data = await resp.json();
+                    this.connected = data.connected;
+                    this.model = data.model || '';
+                } catch {
+                    this.connected = false;
+                }
+            },
+
+            async sendMessage() {
+                const text = this.input.trim();
+                if (!text || this.loading) return;
+
+                this.messages.push({ role: 'user', content: text });
+                this.input = '';
+                this.loading = true;
+                this.scrollToBottom();
+
+                try {
+                    const resp = await fetch('/api/v1/llm/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text, session_id: this.sessionId })
+                    });
+                    const data = await resp.json();
+                    if (data.error) {
+                        this.messages.push({ role: 'assistant', content: 'Error: ' + data.error });
+                    } else {
+                        this.messages.push({ role: 'assistant', content: data.response });
+                    }
+                } catch (err) {
+                    this.messages.push({ role: 'assistant', content: 'Error: Could not reach the AI service.' });
+                }
+
+                this.loading = false;
+                this.scrollToBottom();
+                this.$refs.chatInput && this.$refs.chatInput.focus();
+            },
+
+            sendSuggestion(text) {
+                this.input = text;
+                this.sendMessage();
+            },
+
+            clearChat() {
+                this.messages = [];
+                fetch('/api/v1/llm/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: this.sessionId })
+                });
+            },
+
+            scrollToBottom() {
+                this.$nextTick(() => {
+                    const el = this.$refs.messages;
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            },
+
+            formatMessage(text) {
+                if (!text) return '';
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/`(.*?)`/g, '<code class="bg-gray-700 px-1 rounded text-purple-300">$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+        }
+    }
+
     function initSparklines() {
         document.querySelectorAll('.dash-spark:not([data-loaded])').forEach(el => {
             el.setAttribute('data-loaded', '1');

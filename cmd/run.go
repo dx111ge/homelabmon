@@ -233,6 +233,9 @@ func runAgent(cmd *cobra.Command, args []string) error {
 
 	// 7. Mesh transport + mTLS
 	transport := mesh.NewTransport(identity, st, collector)
+	if dockerObs != nil {
+		transport.SetDocker(dockerObs)
+	}
 
 	pki := mesh.NewPKI(dir)
 	if pki.CAExists() {
@@ -500,6 +503,13 @@ func runDiscovery(ctx context.Context, engine *discovery.Engine, dockerObs *obse
 		if c.State != "running" {
 			continue
 		}
+		stack := c.Labels["com.docker.compose.project"]
+		health := ""
+		if strings.Contains(c.Status, "(healthy)") {
+			health = "healthy"
+		} else if strings.Contains(c.Status, "(unhealthy)") {
+			health = "unhealthy"
+		}
 		for _, p := range c.Ports {
 			if p.PublicPort == 0 {
 				continue
@@ -514,6 +524,8 @@ func runDiscovery(ctx context.Context, engine *discovery.Engine, dockerObs *obse
 				Source:       "docker",
 				ContainerID:  c.ID[:12],
 				ContainerImg: c.Image,
+				Stack:        stack,
+				Health:       health,
 				Status:       "active",
 				LastSeen:     now,
 			}

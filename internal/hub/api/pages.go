@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -164,6 +166,7 @@ type hostDetailData struct {
 	HostCount   int
 	OnlineCount int
 	Host        models.Host
+	HostIP      string
 	Metric      *models.MetricSnapshot
 	Disks       []models.DiskUsage
 	Services    []models.DiscoveredService
@@ -185,12 +188,18 @@ func (u *UIServer) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	hostIP := ""
+	if len(host.IPAddresses) > 0 {
+		hostIP = host.IPAddresses[0]
+	}
+
 	data := hostDetailData{
 		Title:       host.Hostname,
 		Version:     u.identity.Version,
 		HostCount:   len(allHosts),
 		OnlineCount: onlineCount,
 		Host:        *host,
+		HostIP:      hostIP,
 	}
 
 	metric, err := u.store.GetLatestMetric(r.Context(), id)
@@ -253,31 +262,38 @@ func (u *UIServer) handleServicesPage(w http.ResponseWriter, r *http.Request) {
 }
 
 type devicesPageData struct {
-	Title       string
-	Version     string
-	HostCount   int
-	OnlineCount int
-	Devices     []models.Host
-	ScanEnabled bool
+	Title          string
+	Version        string
+	HostCount      int
+	OnlineCount    int
+	Agents         []models.Host
+	PassiveDevices []models.Host
+	ScanEnabled    bool
 }
 
 func (u *UIServer) buildDevicesData(r *http.Request) devicesPageData {
 	allHosts, _ := u.store.ListHosts(r.Context())
 	onlineCount := 0
+	var agents, passive []models.Host
 	for _, h := range allHosts {
 		if h.Status == "online" {
 			onlineCount++
 		}
+		if h.MonitorType == "agent" {
+			agents = append(agents, h)
+		} else {
+			passive = append(passive, h)
+		}
 	}
-	devices, _ := u.store.ListPassiveDevices(r.Context())
 
 	return devicesPageData{
-		Title:       "Devices",
-		Version:     u.identity.Version,
-		HostCount:   len(allHosts),
-		OnlineCount: onlineCount,
-		Devices:     devices,
-		ScanEnabled: u.scanEnabled,
+		Title:          "Devices",
+		Version:        u.identity.Version,
+		HostCount:      len(allHosts),
+		OnlineCount:    onlineCount,
+		Agents:         agents,
+		PassiveDevices: passive,
+		ScanEnabled:    u.scanEnabled,
 	}
 }
 
@@ -462,44 +478,6 @@ func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // Chat page
-
-type chatPageData struct {
-	Title       string
-	Version     string
-	HostCount   int
-	OnlineCount int
-	LLMEnabled  bool
-	LLMModel    string
-}
-
-func (u *UIServer) handleChatPage(w http.ResponseWriter, r *http.Request) {
-	allHosts, _ := u.store.ListHosts(r.Context())
-	onlineCount := 0
-	for _, h := range allHosts {
-		if h.Status == "online" {
-			onlineCount++
-		}
-	}
-
-	model := ""
-	if u.llmClient != nil {
-		model = u.llmClient.Model()
-	}
-
-	data := chatPageData{
-		Title:       "AI Chat",
-		Version:     u.identity.Version,
-		HostCount:   len(allHosts),
-		OnlineCount: onlineCount,
-		LLMEnabled:  u.chatHandler != nil,
-		LLMModel:    model,
-	}
-
-	if err := u.chatTmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		log.Error().Err(err).Msg("render chat page")
-		http.Error(w, "render error", 500)
-	}
-}
 
 // LLM API handlers
 
@@ -886,4 +864,58 @@ func (u *UIServer) handleOUICheck(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Write([]byte(`<span class="text-sm text-gray-400"><i class="fa-solid fa-check mr-1"></i>All vendors already resolved</span>`))
 	}
+}
+
+// handleDockerControl proxies a docker start/stop/restart to the correct agent node.
+func (u *UIServer) handleDockerControl(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		HostID      string `json:"host_id"`
+		ContainerID string `json:"container_id"`
+		Action      string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONResp(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+
+	// If it's our own node, call the mesh endpoint locally
+	if req.HostID == u.identity.ID {
+		body, _ := json.Marshal(map[string]string{"container_id": req.ContainerID, "action": req.Action})
+		resp, err := http.Post("http://127.0.0.1"+viper.GetString("bind")+"/api/v1/docker/control",
+			"application/json", bytes.NewReader(body))
+		if err != nil {
+			writeJSONResp(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		defer resp.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+		return
+	}
+
+	// Find the peer address for the host
+	peer, err := u.store.GetPeer(r.Context(), req.HostID)
+	if err != nil || peer == nil {
+		writeJSONResp(w, http.StatusNotFound, map[string]string{"error": "peer not found"})
+		return
+	}
+
+	body, _ := json.Marshal(map[string]string{"container_id": req.ContainerID, "action": req.Action})
+	peerURL := fmt.Sprintf("http://%s/api/v1/docker/control", peer.Address)
+	resp, err := http.Post(peerURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		writeJSONResp(w, http.StatusBadGateway, map[string]string{"error": "peer unreachable: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func writeJSONResp(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }

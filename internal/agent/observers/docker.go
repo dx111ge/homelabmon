@@ -102,4 +102,25 @@ func (o *DockerObserver) Collect(ctx context.Context) (*plugin.ObserverResult, e
 	}, nil
 }
 
+// ContainerAction performs start/stop/restart on a container by ID.
+func (o *DockerObserver) ContainerAction(ctx context.Context, containerID, action string) error {
+	if o.client == nil {
+		return fmt.Errorf("docker client not initialized")
+	}
+	url := fmt.Sprintf("http://docker/v1.47/containers/%s/%s", containerID, action)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("docker %s: %w", action, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("docker %s returned %d", action, resp.StatusCode)
+	}
+	return nil
+}
+
 // dockerHTTPClient is defined in docker_unix.go / docker_windows.go

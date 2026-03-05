@@ -12,6 +12,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// DockerController can start/stop/restart containers.
+type DockerController interface {
+	ContainerAction(ctx context.Context, containerID, action string) error
+}
+
 // Transport handles HTTP communication between mesh nodes.
 type Transport struct {
 	identity  *models.NodeIdentity
@@ -21,6 +26,7 @@ type Transport struct {
 	mux       *http.ServeMux
 	handler   http.Handler
 	pki       *PKI
+	docker    DockerController
 }
 
 func NewTransport(identity *models.NodeIdentity, s *store.Store, collector *agent.Collector) *Transport {
@@ -42,6 +48,11 @@ func (t *Transport) Mux() *http.ServeMux {
 // SetHandler allows wrapping the mux with middleware (e.g., auth).
 func (t *Transport) SetHandler(h http.Handler) {
 	t.handler = h
+}
+
+// SetDocker sets the Docker controller for container management.
+func (t *Transport) SetDocker(d DockerController) {
+	t.docker = d
 }
 
 // SetPKI configures TLS for the transport.

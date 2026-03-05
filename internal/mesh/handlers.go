@@ -22,6 +22,7 @@ func (t *Transport) setupRoutes() {
 	t.mux.HandleFunc("GET /api/v1/services", t.handleListServices)
 	t.mux.HandleFunc("GET /api/v1/services/{host_id}", t.handleHostServices)
 	t.mux.HandleFunc("POST /api/v1/enroll", t.handleEnroll)
+	t.mux.HandleFunc("POST /api/v1/docker/control", t.handleDockerControl)
 }
 
 type registerRequest struct {
@@ -284,6 +285,32 @@ func (t *Transport) handleEnroll(w http.ResponseWriter, r *http.Request) {
 		"cert":    string(signedCert),
 		"ca_cert": string(caCert),
 	})
+}
+
+func (t *Transport) handleDockerControl(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ContainerID string `json:"container_id"`
+		Action      string `json:"action"` // start, stop, restart
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	if req.Action != "start" && req.Action != "stop" && req.Action != "restart" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action must be start, stop, or restart"})
+		return
+	}
+	if t.docker == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "docker not available on this node"})
+		return
+	}
+	if err := t.docker.ContainerAction(r.Context(), req.ContainerID, req.Action); err != nil {
+		log.Warn().Err(err).Str("container", req.ContainerID).Str("action", req.Action).Msg("docker control failed")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	log.Info().Str("container", req.ContainerID).Str("action", req.Action).Msg("docker control success")
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

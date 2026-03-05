@@ -89,18 +89,99 @@
 {{end}}
 
 {{if .Services}}
+{{$hostIP := .HostIP}}
+{{$split := splitServices .Services}}
+
+{{if $split.DockerStacks}}
 <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6">
-    <h2 class="text-lg font-semibold mb-4"><i class="fa-solid fa-cubes mr-2 text-gray-400"></i>Discovered Services ({{len .Services}})</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {{range .Services}}
+    <h2 class="text-lg font-semibold mb-4"><i class="fa-brands fa-docker mr-2 text-blue-400"></i>Docker Services ({{$split.DockerCount}})</h2>
+    {{range $i, $stack := $split.DockerStacks}}
+    <div class="mb-3" x-data="{open: true}">
+        <button @click="open = !open" class="flex items-center gap-2 w-full text-left px-3 py-2 bg-gray-800/70 rounded-lg hover:bg-gray-800 transition-colors">
+            <i class="fa-solid fa-chevron-right text-[10px] text-gray-500 transition-transform duration-200" :class="open && 'rotate-90'"></i>
+            {{if eq $stack.Name "_ungrouped"}}
+            <i class="fa-brands fa-docker text-gray-400"></i>
+            <span class="text-sm font-medium text-gray-300">Standalone Containers</span>
+            {{else}}
+            <i class="fa-solid fa-layer-group text-blue-400"></i>
+            <span class="text-sm font-medium text-gray-300">{{$stack.Name}}</span>
+            {{end}}
+            <span class="text-xs text-gray-500 ml-1">({{len $stack.Services}})</span>
+        </button>
+        <div x-show="open" x-transition class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mt-2 pl-2">
+            {{range $stack.Services}}
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded p-3 group" x-data="{busy:false}">
+                <i class="fa-brands fa-docker text-lg text-blue-400/60 w-6 text-center"></i>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm truncate">{{.Name}}</span>
+                        {{if and $hostIP (eq .Protocol "tcp")}}
+                        <a href="http://{{$hostIP}}:{{.Port}}" target="_blank" rel="noopener"
+                           class="text-blue-400 hover:text-blue-300 text-xs flex-shrink-0" title="Open http://{{$hostIP}}:{{.Port}}">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        </a>
+                        {{end}}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        :{{.Port}}/{{.Protocol}}
+                        {{if .ContainerImg}}<span class="text-blue-400/70 ml-1">{{.ContainerImg}}</span>{{end}}
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="hidden group-hover:flex items-center gap-1 mr-1" x-show="!busy">
+                        <button @click="busy=true; fetch('/ui/docker/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host_id:'{{$.Host.ID}}',container_id:'{{.ContainerID}}',action:'restart'})}).then(()=>{busy=false;setTimeout(()=>location.reload(),2000)})"
+                            class="text-yellow-400 hover:text-yellow-300 text-[10px] px-1" title="Restart">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                        <button @click="busy=true; fetch('/ui/docker/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host_id:'{{$.Host.ID}}',container_id:'{{.ContainerID}}',action:'stop'})}).then(()=>{busy=false;setTimeout(()=>location.reload(),2000)})"
+                            class="text-red-400 hover:text-red-300 text-[10px] px-1" title="Stop">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                    </div>
+                    <template x-if="busy">
+                        <i class="fa-solid fa-spinner fa-spin text-[10px] text-gray-400 mr-1"></i>
+                    </template>
+                    {{if eq .Health "healthy"}}
+                    <span class="text-green-400 text-xs" title="Healthy"><i class="fa-solid fa-circle text-[6px]"></i></span>
+                    {{else if eq .Health "unhealthy"}}
+                    <span class="text-red-400 text-xs" title="Unhealthy"><i class="fa-solid fa-circle text-[6px]"></i></span>
+                    {{else if eq .Status "active"}}
+                    <span class="text-yellow-400 text-xs" title="Running (no healthcheck)"><i class="fa-solid fa-circle text-[6px]"></i></span>
+                    {{else}}
+                    <span class="text-gray-600 text-xs" title="Stopped"><i class="fa-solid fa-circle text-[6px]"></i></span>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{if $split.SystemServices}}
+<div class="bg-gray-900 border border-gray-800 rounded-lg p-6 mb-6" x-data="{open: false}">
+    <button @click="open = !open" class="flex items-center gap-2 w-full text-left">
+        <h2 class="text-lg font-semibold"><i class="fa-solid fa-gears mr-2 text-gray-400"></i>System Services ({{len $split.SystemServices}})</h2>
+        <i class="fa-solid fa-chevron-right text-xs text-gray-500 transition-transform duration-200 ml-2" :class="open && 'rotate-90'"></i>
+    </button>
+    <div x-show="open" x-transition class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mt-4">
+        {{range $split.SystemServices}}
         <div class="flex items-center gap-3 bg-gray-800/50 rounded p-3">
-            <i class="{{svcIcon .Category}} text-lg text-gray-400 w-6 text-center"></i>
+            <i class="{{svcIcon .Category}} text-lg text-gray-500 w-6 text-center"></i>
             <div class="min-w-0 flex-1">
-                <div class="font-medium text-sm truncate">{{.Name}}</div>
+                <div class="flex items-center gap-2">
+                    <span class="font-medium text-sm truncate">{{.Name}}</span>
+                    {{if and $hostIP (eq .Protocol "tcp")}}
+                    <a href="http://{{$hostIP}}:{{.Port}}" target="_blank" rel="noopener"
+                       class="text-blue-400 hover:text-blue-300 text-xs flex-shrink-0" title="Open http://{{$hostIP}}:{{.Port}}">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    </a>
+                    {{end}}
+                </div>
                 <div class="text-xs text-gray-400">
                     :{{.Port}}/{{.Protocol}}
-                    {{if .ContainerImg}}<span class="text-blue-400 ml-1"><i class="fa-brands fa-docker"></i> {{.ContainerImg}}</span>{{end}}
-                    {{if and .Process (not .ContainerImg)}}<span class="ml-1">{{.Process}}</span>{{end}}
+                    {{if .Process}}<span class="ml-1">{{.Process}}</span>{{end}}
                 </div>
             </div>
             {{if eq .Status "active"}}
@@ -112,6 +193,8 @@
         {{end}}
     </div>
 </div>
+{{end}}
+
 {{end}}
 
 <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">

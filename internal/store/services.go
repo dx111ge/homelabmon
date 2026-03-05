@@ -11,8 +11,8 @@ import (
 // UpsertService inserts or updates a discovered service.
 func (s *Store) UpsertService(ctx context.Context, svc *models.DiscoveredService) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO services (host_id, name, port, protocol, process, category, source, container_id, container_image, status, first_seen, last_seen)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+		INSERT INTO services (host_id, name, port, protocol, process, category, source, container_id, container_image, stack, health, status, first_seen, last_seen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
 		ON CONFLICT(host_id, port, protocol) DO UPDATE SET
 			name = excluded.name,
 			process = excluded.process,
@@ -20,10 +20,12 @@ func (s *Store) UpsertService(ctx context.Context, svc *models.DiscoveredService
 			source = excluded.source,
 			container_id = excluded.container_id,
 			container_image = excluded.container_image,
+			stack = excluded.stack,
+			health = excluded.health,
 			status = excluded.status,
 			last_seen = datetime('now')
 	`, svc.HostID, svc.Name, svc.Port, svc.Protocol, svc.Process,
-		svc.Category, svc.Source, svc.ContainerID, svc.ContainerImg, svc.Status)
+		svc.Category, svc.Source, svc.ContainerID, svc.ContainerImg, svc.Stack, svc.Health, svc.Status)
 	return err
 }
 
@@ -31,8 +33,8 @@ func (s *Store) UpsertService(ctx context.Context, svc *models.DiscoveredService
 func (s *Store) ListServicesByHost(ctx context.Context, hostID string) ([]models.DiscoveredService, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, host_id, name, port, protocol, process, category, source,
-		       container_id, container_image, status, first_seen, last_seen
-		FROM services WHERE host_id = ? ORDER BY port
+		       container_id, container_image, stack, health, status, first_seen, last_seen
+		FROM services WHERE host_id = ? ORDER BY stack, name, port
 	`, hostID)
 	if err != nil {
 		return nil, err
@@ -45,7 +47,7 @@ func (s *Store) ListServicesByHost(ctx context.Context, hostID string) ([]models
 func (s *Store) ListAllServices(ctx context.Context) ([]models.DiscoveredService, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, host_id, name, port, protocol, process, category, source,
-		       container_id, container_image, status, first_seen, last_seen
+		       container_id, container_image, stack, health, status, first_seen, last_seen
 		FROM services ORDER BY name, port
 	`)
 	if err != nil {
@@ -79,7 +81,7 @@ func scanServices(rows *sql.Rows) ([]models.DiscoveredService, error) {
 		err := rows.Scan(
 			&svc.ID, &svc.HostID, &svc.Name, &svc.Port, &svc.Protocol,
 			&svc.Process, &svc.Category, &svc.Source,
-			&svc.ContainerID, &svc.ContainerImg,
+			&svc.ContainerID, &svc.ContainerImg, &svc.Stack, &svc.Health,
 			&svc.Status, &svc.FirstSeen, &svc.LastSeen,
 		)
 		if err != nil {

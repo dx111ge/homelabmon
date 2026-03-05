@@ -46,7 +46,7 @@ func initConfig() {
 		viper.SetConfigName("config")
 		viper.SetConfigType("yaml")
 	}
-	viper.SetEnvPrefix("HOMEMON")
+	viper.SetEnvPrefix("HOMELABMON")
 	viper.AutomaticEnv()
 	viper.ReadInConfig()
 

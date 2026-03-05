@@ -3,10 +3,10 @@
     <div>
         <h1 class="text-xl font-semibold flex items-center gap-2">
             <i class="fa-solid fa-satellite-dish text-blue-400"></i>
-            Network Devices
-            <span class="text-sm font-normal text-gray-500">({{len .Devices}} discovered)</span>
+            All Devices
+            <span class="text-sm font-normal text-gray-500">({{.HostCount}} total)</span>
         </h1>
-        <p class="text-sm text-gray-500 mt-1">Passively discovered devices on your network via ARP, mDNS, and OUI lookup.</p>
+        <p class="text-sm text-gray-500 mt-1">Agent nodes and passively discovered network devices.</p>
     </div>
     {{if .ScanEnabled}}
     <div class="flex items-center gap-2">
@@ -19,22 +19,69 @@
     {{end}}
 </div>
 
+{{if .Agents}}
+<h2 class="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+    <i class="fa-solid fa-server text-blue-400"></i>Agent Nodes ({{len .Agents}})
+</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
+    {{range .Agents}}
+    <a href="/ui/host/{{.ID}}" class="bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-600 transition-colors block">
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+                {{if eq .OS "linux"}}<i class="fa-brands fa-linux text-gray-400"></i>
+                {{else if eq .OS "darwin"}}<i class="fa-brands fa-apple text-gray-400"></i>
+                {{else if eq .OS "windows"}}<i class="fa-brands fa-windows text-blue-400"></i>
+                {{else}}<i class="fa-solid fa-server text-gray-400"></i>{{end}}
+                <span class="font-medium text-sm truncate">{{.Label}}</span>
+            </div>
+            {{if eq .Status "online"}}
+                <span class="text-green-400 text-xs"><i class="fa-solid fa-circle text-[8px]"></i></span>
+            {{else}}
+                <span class="text-red-400 text-xs"><i class="fa-solid fa-circle text-[8px]"></i></span>
+            {{end}}
+        </div>
+        <div class="space-y-1 text-xs text-gray-400">
+            {{if .IPAddresses}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-network-wired w-4 text-center"></i>
+                <span>{{index .IPAddresses 0}}</span>
+            </div>
+            {{end}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-microchip w-4 text-center"></i>
+                <span>{{.Platform}}</span>
+            </div>
+            {{if .CPUCores}}
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-gauge w-4 text-center"></i>
+                <span>{{.CPUCores}} cores &middot; {{formatBytes .MemoryTotal}} RAM</span>
+            </div>
+            {{end}}
+        </div>
+    </a>
+    {{end}}
+</div>
+{{end}}
+
 {{if .ScanEnabled}}
+<h2 class="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+    <i class="fa-solid fa-satellite-dish text-purple-400"></i>Network Devices ({{len .PassiveDevices}})
+</h2>
 <div hx-get="/ui/devices-content" hx-trigger="every 30s" hx-swap="innerHTML">
     {{template "devices-grid" .}}
 </div>
-{{else}}
+{{else if not .Agents}}
 <div class="text-center py-16 text-gray-500">
     <i class="fa-solid fa-radar text-4xl mb-4 block text-gray-600"></i>
     <p class="text-lg">Network scanning is disabled</p>
-    <p class="text-sm mt-2">Start homemon with <code class="bg-gray-800 px-2 py-0.5 rounded text-gray-300">--scan</code> to discover network devices.</p>
+    <p class="text-sm mt-2">Start homelabmon with <code class="bg-gray-800 px-2 py-0.5 rounded text-gray-300">--scan</code> to discover network devices.</p>
 </div>
 {{end}}
 {{end}}
 
 {{define "devices-grid"}}
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-    {{range .Devices}}
+    {{range .PassiveDevices}}
     <div class="bg-gray-900 border border-gray-800 rounded-lg p-4" x-data="{editing: false, name: '{{.Label}}', devType: '{{.DeviceType}}', deleted: false}">
         <template x-if="!deleted">
         <div>
@@ -122,7 +169,7 @@
     </div>
     {{end}}
 
-    {{if not .Devices}}
+    {{if not .PassiveDevices}}
     <div class="col-span-full text-center py-12 text-gray-500">
         <i class="fa-solid fa-magnifying-glass text-4xl mb-3 block"></i>
         <p>No devices discovered yet.</p>

@@ -13,7 +13,9 @@ type DiscoveredService struct {
 	Source       string    `json:"source"` // fingerprint, docker, manual
 	ContainerID  string    `json:"container_id,omitempty"`
 	ContainerImg string    `json:"container_image,omitempty"`
-	Status       string    `json:"status"` // active, gone
+	Stack        string    `json:"stack,omitempty"`  // docker compose project name
+	Health       string    `json:"health,omitempty"` // healthy, unhealthy, none, ""
+	Status       string    `json:"status"`           // active, gone
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
 }

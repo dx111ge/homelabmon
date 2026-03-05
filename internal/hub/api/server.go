@@ -32,7 +32,6 @@ type UIServer struct {
 	svcsTmpl     *template.Template
 	devsTmpl     *template.Template
 	settingsTmpl *template.Template
-	chatTmpl     *template.Template
 	loginTmpl    *template.Template
 }
 
@@ -66,6 +65,7 @@ func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.No
 		"hostLabel": func(h models.Host) string {
 			return h.Label()
 		},
+		"splitServices": splitServices,
 	}
 
 	// Parse each page template separately with layout to avoid "content" name collisions
@@ -89,10 +89,6 @@ func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.No
 	if err != nil {
 		return nil, fmt.Errorf("parse settings templates: %w", err)
 	}
-	chatTmpl, err := template.New("").Funcs(funcMap).ParseFS(web.TemplateFS, "templates/layout.html", "templates/chat.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse chat templates: %w", err)
-	}
 	loginTmpl, err := template.New("").ParseFS(web.TemplateFS, "templates/login.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse login template: %w", err)
@@ -112,7 +108,6 @@ func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.No
 		svcsTmpl:     svcsTmpl,
 		devsTmpl:     devsTmpl,
 		settingsTmpl: settingsTmpl,
-		chatTmpl:     chatTmpl,
 		loginTmpl:    loginTmpl,
 	}, nil
 }
@@ -142,8 +137,7 @@ func (u *UIServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/settings", u.handleSaveSettings)
 	mux.HandleFunc("POST /api/v1/scan", u.handleTriggerScan)
 
-	// Chat (LLM)
-	mux.HandleFunc("GET /ui/chat", u.handleChatPage)
+	// Chat (LLM) - sidebar panel, no dedicated page needed
 	mux.HandleFunc("POST /api/v1/llm/chat", u.handleLLMChat)
 	mux.HandleFunc("GET /api/v1/llm/status", u.handleLLMStatus)
 	mux.HandleFunc("POST /api/v1/llm/clear", u.handleLLMClear)
@@ -153,6 +147,9 @@ func (u *UIServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/hosts/{id}/type", u.handleUpdateDeviceType)
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", u.handleDeleteHost)
 	mux.HandleFunc("POST /api/v1/oui-check", u.handleOUICheck)
+
+	// Docker control (proxied to agent)
+	mux.HandleFunc("POST /ui/docker/control", u.handleDockerControl)
 
 	// Integrations
 	mux.HandleFunc("POST /api/v1/integrations", u.handleSaveIntegration)
@@ -190,6 +187,44 @@ func deviceTypeIcon(deviceType string) string {
 	default:
 		return "fa-solid fa-circle-question"
 	}
+}
+
+// serviceStack groups services by their Docker Compose stack name.
+type serviceStack struct {
+	Name     string
+	Services []models.DiscoveredService
+}
+
+// splitServices separates Docker container services (grouped by stack) from system services.
+type splitServicesResult struct {
+	DockerStacks   []serviceStack
+	DockerCount    int
+	SystemServices []models.DiscoveredService
+}
+
+func splitServices(services []models.DiscoveredService) splitServicesResult {
+	var result splitServicesResult
+	order := []string{}
+	groups := map[string][]models.DiscoveredService{}
+	for _, svc := range services {
+		if svc.Source == "docker" {
+			name := svc.Stack
+			if name == "" {
+				name = "_ungrouped"
+			}
+			if _, exists := groups[name]; !exists {
+				order = append(order, name)
+			}
+			groups[name] = append(groups[name], svc)
+			result.DockerCount++
+		} else {
+			result.SystemServices = append(result.SystemServices, svc)
+		}
+	}
+	for _, name := range order {
+		result.DockerStacks = append(result.DockerStacks, serviceStack{Name: name, Services: groups[name]})
+	}
+	return result
 }
 
 func formatBytes(b uint64) string {
