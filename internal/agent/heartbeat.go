@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,6 +26,7 @@ type HeartbeatService struct {
 	interval  time.Duration
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
+	useTLS    bool
 }
 
 func NewHeartbeatService(identity *models.NodeIdentity, collector *Collector, s *store.Store) *HeartbeatService {
@@ -35,6 +37,12 @@ func NewHeartbeatService(identity *models.NodeIdentity, collector *Collector, s 
 		client:    &http.Client{Timeout: 10 * time.Second},
 		interval:  DefaultHeartbeatInterval,
 	}
+}
+
+// SetTLSConfig configures the heartbeat client for mTLS.
+func (h *HeartbeatService) SetTLSConfig(cfg *tls.Config) {
+	h.client.Transport = &http.Transport{TLSClientConfig: cfg}
+	h.useTLS = true
 }
 
 func (h *HeartbeatService) Start(ctx context.Context) {
@@ -107,7 +115,11 @@ func (h *HeartbeatService) sendHeartbeats(ctx context.Context) {
 }
 
 func (h *HeartbeatService) sendToPeer(ctx context.Context, peer models.PeerInfo, body []byte) {
-	url := fmt.Sprintf("http://%s/api/v1/heartbeat", peer.Address)
+	scheme := "http"
+	if h.useTLS {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s/api/v1/heartbeat", scheme, peer.Address)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return

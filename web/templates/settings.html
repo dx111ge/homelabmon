@@ -7,58 +7,89 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <!-- Notification Senders -->
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
+    <!-- Notifications -->
+    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5" x-data="settingsEditor()">
         <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
             <i class="fa-solid fa-bell text-yellow-400"></i>
             Notifications
         </h2>
-
-        {{if .Senders}}
-        <div class="space-y-2 mb-4">
-            {{range .Senders}}
-            <div class="flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-circle-check text-green-400"></i>
-                <span class="font-mono text-gray-300">{{.}}</span>
-                <span class="text-xs text-gray-500">active</span>
+        <div class="space-y-3 text-sm">
+            <div>
+                <label class="text-xs text-gray-400 flex items-center gap-1 mb-1">
+                    <i class="fa-solid fa-comment-dots"></i>ntfy.sh topic URL
+                    <span class="help-tip" data-tip="Free push notification service. Create a topic at ntfy.sh and paste the URL here. Supports self-hosted ntfy instances too."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </label>
+                <input type="text" x-model="ntfy" placeholder="https://ntfy.sh/your-topic"
+                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
             </div>
-            {{end}}
+            <div>
+                <label class="text-xs text-gray-400 flex items-center gap-1 mb-1">
+                    <i class="fa-solid fa-link"></i>Webhook URL
+                    <span class="help-tip" data-tip="Sends a JSON POST with title, message, and severity fields. Works with Discord webhooks, Slack incoming webhooks, or any custom endpoint."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </label>
+                <input type="text" x-model="webhook" placeholder="https://discord.com/api/webhooks/..."
+                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+            </div>
         </div>
-        <button hx-post="/ui/test-notification" hx-swap="outerHTML"
-            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors">
-            <i class="fa-solid fa-paper-plane mr-1"></i>Send Test
-        </button>
-        {{else}}
-        <div class="text-sm text-gray-500">
-            <p>No notification senders configured.</p>
-            <p class="mt-2 text-xs">Add notifications with CLI flags:</p>
-            <code class="block mt-2 bg-gray-800 px-3 py-2 rounded text-xs text-gray-300">--notify-ntfy https://ntfy.sh/your-topic</code>
-            <code class="block mt-1 bg-gray-800 px-3 py-2 rounded text-xs text-gray-300">--notify-webhook https://discord.com/api/webhooks/...</code>
-        </div>
-        {{end}}
-    </div>
 
-    <!-- Alert Thresholds -->
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-5">
-        <h2 class="text-sm font-semibold flex items-center gap-2 mb-4">
-            <i class="fa-solid fa-gauge-high text-orange-400"></i>
-            Alert Thresholds
+        <h2 class="text-sm font-semibold flex items-center gap-2 mb-4 mt-6 border-t border-gray-800 pt-4">
+            <i class="fa-solid fa-sliders text-orange-400"></i>
+            Monitoring
         </h2>
         <div class="space-y-3 text-sm">
             <div class="flex items-center justify-between">
-                <span class="text-gray-400">CPU</span>
-                <span class="font-mono text-gray-300">{{printf "%.0f" .CPUThreshold}}%</span>
+                <span class="text-gray-400 flex items-center gap-1">CPU alert threshold
+                    <span class="help-tip" data-tip="Send a notification when any host's CPU usage stays above this percentage. Alerts are deduplicated with a 10-minute cooldown."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <div class="flex items-center gap-1">
+                    <input type="number" x-model="cpu" min="0" max="100" step="5"
+                        class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+                    <span class="text-gray-500">%</span>
+                </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-gray-400">Memory</span>
-                <span class="font-mono text-gray-300">{{printf "%.0f" .MemThreshold}}%</span>
+                <span class="text-gray-400 flex items-center gap-1">Memory alert threshold
+                    <span class="help-tip" data-tip="Send a notification when any host's RAM usage exceeds this percentage."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <div class="flex items-center gap-1">
+                    <input type="number" x-model="mem" min="0" max="100" step="5"
+                        class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+                    <span class="text-gray-500">%</span>
+                </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-gray-400">Disk</span>
-                <span class="font-mono text-gray-300">{{printf "%.0f" .DiskThreshold}}%</span>
+                <span class="text-gray-400 flex items-center gap-1">Disk alert threshold
+                    <span class="help-tip" data-tip="Send a notification when any disk partition usage exceeds this percentage. Each partition is checked independently."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <div class="flex items-center gap-1">
+                    <input type="number" x-model="disk" min="0" max="100" step="5"
+                        class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+                    <span class="text-gray-500">%</span>
+                </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-gray-800 pt-3">
+                <span class="text-gray-400 flex items-center gap-1">Metric retention
+                    <span class="help-tip" data-tip="How many days of metric history to keep in the database. Older data is automatically purged every hour. Set to 0 to keep all data forever."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <div class="flex items-center gap-1">
+                    <input type="number" x-model="retention" min="0" max="365" step="1"
+                        class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+                    <span class="text-gray-500">days</span>
+                </div>
             </div>
         </div>
-        <p class="mt-3 text-[10px] text-gray-600">Configure via <code>--notify-cpu-threshold</code>, <code>--notify-mem-threshold</code>, <code>--notify-disk-threshold</code></p>
+        <div class="flex items-center gap-3 mt-4">
+            <button @click="save()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors">
+                <i class="fa-solid fa-floppy-disk mr-1"></i>Save
+            </button>
+            <span id="test-notif"></span>
+            <button hx-post="/ui/test-notification" hx-target="#test-notif" hx-swap="innerHTML"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
+                :class="(ntfy || webhook) ? '' : 'opacity-50 pointer-events-none'">
+                <i class="fa-solid fa-paper-plane mr-1"></i>Test
+            </button>
+            <span x-html="msg"></span>
+        </div>
     </div>
 
     <!-- Node Info -->
@@ -79,6 +110,10 @@
             <div class="flex items-center justify-between">
                 <span class="text-gray-400">Scanning</span>
                 {{if .ScanEnabled}}<span class="text-green-400">enabled</span>{{else}}<span class="text-gray-500">disabled</span>{{end}}
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400">Authentication</span>
+                {{if .AuthEnabled}}<span class="text-green-400">enabled</span>{{else}}<span class="text-gray-500">disabled</span>{{end}}
             </div>
         </div>
     </div>
@@ -180,6 +215,32 @@
 </div>
 
 <script>
+function settingsEditor() {
+    return {
+        ntfy: '{{.NtfyURL}}',
+        webhook: '{{.WebhookURL}}',
+        cpu: {{printf "%.0f" .CPUThreshold}},
+        mem: {{printf "%.0f" .MemThreshold}},
+        disk: {{printf "%.0f" .DiskThreshold}},
+        retention: {{.RetentionDays}},
+        msg: '',
+        async save() {
+            this.msg = '';
+            const res = await fetch('/api/v1/settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ntfy_url: this.ntfy.trim(),
+                    webhook_url: this.webhook.trim(),
+                    retention_days: String(this.retention),
+                    cpu_threshold: String(this.cpu),
+                    mem_threshold: String(this.mem),
+                    disk_threshold: String(this.disk)
+                })
+            });
+            this.msg = await res.text();
+        }
+    };
+}
 function integrationManager() {
     return {
         adding: false,

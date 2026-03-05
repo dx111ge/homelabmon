@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"time"
 
@@ -18,6 +19,8 @@ type Transport struct {
 	collector *agent.Collector
 	server    *http.Server
 	mux       *http.ServeMux
+	handler   http.Handler
+	pki       *PKI
 }
 
 func NewTransport(identity *models.NodeIdentity, s *store.Store, collector *agent.Collector) *Transport {
@@ -36,21 +39,48 @@ func (t *Transport) Mux() *http.ServeMux {
 	return t.mux
 }
 
+// SetHandler allows wrapping the mux with middleware (e.g., auth).
+func (t *Transport) SetHandler(h http.Handler) {
+	t.handler = h
+}
+
+// SetPKI configures TLS for the transport.
+func (t *Transport) SetPKI(pki *PKI) {
+	t.pki = pki
+}
+
 func (t *Transport) Start(bindAddr string) error {
+	handler := http.Handler(t.mux)
+	if t.handler != nil {
+		handler = t.handler
+	}
 	t.server = &http.Server{
 		Addr:         bindAddr,
-		Handler:      t.mux,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	go func() {
-		log.Info().Str("bind", bindAddr).Msg("transport listening")
-		if err := t.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("transport failed")
-		}
-	}()
+	if t.pki != nil && t.pki.Ready() {
+		t.server.TLSConfig = t.pki.ServerTLSConfig()
+		// Also allow non-mTLS connections (browsers, enrollment)
+		// by accepting but not requiring client certs
+		t.server.TLSConfig.ClientAuth = tls.VerifyClientCertIfGiven
+		go func() {
+			log.Info().Str("bind", bindAddr).Msg("transport listening (mTLS)")
+			if err := t.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("transport failed")
+			}
+		}()
+	} else {
+		go func() {
+			log.Info().Str("bind", bindAddr).Msg("transport listening")
+			if err := t.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("transport failed")
+			}
+		}()
+	}
 	return nil
 }
 

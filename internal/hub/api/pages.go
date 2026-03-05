@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,35 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
+
+// Login page
+func (u *UIServer) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	// If auth disabled or already logged in, redirect to dashboard
+	if !u.auth.Enabled() || u.auth.validSession(r) {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	u.loginTmpl.ExecuteTemplate(w, "login", map[string]string{"Error": ""})
+}
+
+func (u *UIServer) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
+	if !u.auth.Enabled() {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	token := r.FormValue("token")
+	if u.auth.CheckToken(token) {
+		u.auth.SetSessionCookie(w)
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	u.loginTmpl.ExecuteTemplate(w, "login", map[string]string{"Error": "Invalid token"})
+}
+
+func (u *UIServer) handleLogout(w http.ResponseWriter, r *http.Request) {
+	u.auth.ClearSessionCookie(w)
+	http.Redirect(w, r, "/ui/login", http.StatusFound)
+}
 
 type hostWithMetric struct {
 	Host     models.Host
@@ -264,10 +294,14 @@ type settingsPageData struct {
 	OnlineCount   int
 	Senders       []string
 	ScanEnabled   bool
+	AuthEnabled   bool
 	NodeID        string
 	CPUThreshold  float64
 	MemThreshold  float64
 	DiskThreshold float64
+	RetentionDays int
+	NtfyURL       string
+	WebhookURL    string
 	Integrations  []store.Integration
 }
 
@@ -289,10 +323,14 @@ func (u *UIServer) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		OnlineCount:   onlineCount,
 		Senders:       u.dispatcher.SenderNames(),
 		ScanEnabled:   u.scanEnabled,
+		AuthEnabled:   u.auth.Enabled(),
 		NodeID:        u.identity.ID,
 		CPUThreshold:  viper.GetFloat64("notify-cpu-threshold"),
 		MemThreshold:  viper.GetFloat64("notify-mem-threshold"),
 		DiskThreshold: viper.GetFloat64("notify-disk-threshold"),
+		RetentionDays: viper.GetInt("retention-days"),
+		NtfyURL:       viper.GetString("notify-ntfy"),
+		WebhookURL:    viper.GetString("notify-webhook"),
 		Integrations:  integrations,
 	}
 
@@ -311,6 +349,70 @@ func (u *UIServer) handleTestNotification(w http.ResponseWriter, r *http.Request
 	})
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(`<span class="text-sm text-green-400"><i class="fa-solid fa-check mr-1"></i>Test notification sent!</span>`))
+}
+
+func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+
+	var req struct {
+		RetentionDays string `json:"retention_days"`
+		CPUThreshold  string `json:"cpu_threshold"`
+		MemThreshold  string `json:"mem_threshold"`
+		DiskThreshold string `json:"disk_threshold"`
+		NtfyURL       string `json:"ntfy_url"`
+		WebhookURL    string `json:"webhook_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Write([]byte(`<span class="text-red-400 text-sm"><i class="fa-solid fa-xmark mr-1"></i>Invalid request</span>`))
+		return
+	}
+
+	ctx := r.Context()
+
+	if req.RetentionDays != "" {
+		if days, err := strconv.Atoi(req.RetentionDays); err == nil && days >= 0 {
+			u.store.SetSetting(ctx, "retention-days", req.RetentionDays)
+			viper.Set("retention-days", days)
+		}
+	}
+	if req.CPUThreshold != "" {
+		if v, err := strconv.ParseFloat(req.CPUThreshold, 64); err == nil && v >= 0 && v <= 100 {
+			u.store.SetSetting(ctx, "notify-cpu-threshold", req.CPUThreshold)
+			viper.Set("notify-cpu-threshold", v)
+		}
+	}
+	if req.MemThreshold != "" {
+		if v, err := strconv.ParseFloat(req.MemThreshold, 64); err == nil && v >= 0 && v <= 100 {
+			u.store.SetSetting(ctx, "notify-mem-threshold", req.MemThreshold)
+			viper.Set("notify-mem-threshold", v)
+		}
+	}
+	if req.DiskThreshold != "" {
+		if v, err := strconv.ParseFloat(req.DiskThreshold, 64); err == nil && v >= 0 && v <= 100 {
+			u.store.SetSetting(ctx, "notify-disk-threshold", req.DiskThreshold)
+			viper.Set("notify-disk-threshold", v)
+		}
+	}
+
+	// Notification URLs -- always save (empty = remove)
+	ntfyURL := strings.TrimSpace(req.NtfyURL)
+	webhookURL := strings.TrimSpace(req.WebhookURL)
+	u.store.SetSetting(ctx, "notify-ntfy", ntfyURL)
+	u.store.SetSetting(ctx, "notify-webhook", webhookURL)
+	viper.Set("notify-ntfy", ntfyURL)
+	viper.Set("notify-webhook", webhookURL)
+
+	// Rebuild senders
+	var senders []notify.Sender
+	if ntfyURL != "" {
+		senders = append(senders, notify.NewNtfySender(ntfyURL))
+	}
+	if webhookURL != "" {
+		senders = append(senders, notify.NewWebhookSender(webhookURL))
+	}
+	u.dispatcher.SetSenders(senders)
+
+	w.Write([]byte(`<span class="text-green-400 text-sm"><i class="fa-solid fa-check mr-1"></i>Settings saved</span>`))
 }
 
 // Chat page

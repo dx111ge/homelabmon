@@ -57,6 +57,18 @@ func (d *Dispatcher) AddSender(s Sender) {
 	log.Info().Str("sender", s.Name()).Msg("notification sender registered")
 }
 
+// SetSenders replaces all senders (used when reconfiguring from the UI).
+func (d *Dispatcher) SetSenders(senders []Sender) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.senders = senders
+	names := make([]string, len(senders))
+	for i, s := range senders {
+		names[i] = s.Name()
+	}
+	log.Info().Strs("senders", names).Msg("notification senders updated")
+}
+
 // HasSenders returns true if any senders are registered.
 func (d *Dispatcher) HasSenders() bool {
 	d.mu.Lock()

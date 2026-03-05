@@ -1,0 +1,46 @@
+{{define "login"}}
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomelabMon - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
+<body class="h-full text-gray-100 flex items-center justify-center">
+    <div class="w-full max-w-sm mx-auto">
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 shadow-xl">
+            <div class="text-center mb-6">
+                <i class="fa-solid fa-tower-broadcast text-blue-400 text-3xl mb-3"></i>
+                <h1 class="text-xl font-semibold text-white">HomelabMon</h1>
+                <p class="text-sm text-gray-400 mt-1">Enter your access token to continue</p>
+            </div>
+
+            {{if .Error}}
+            <div class="bg-red-900/30 border border-red-700 text-red-300 text-sm px-3 py-2 rounded mb-4">
+                <i class="fa-solid fa-xmark mr-1"></i>{{.Error}}
+            </div>
+            {{end}}
+
+            <form method="POST" action="/ui/login/submit">
+                <div class="mb-4">
+                    <label for="token" class="block text-sm text-gray-400 mb-1">Access Token</label>
+                    <input type="password" id="token" name="token" required autofocus
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                        placeholder="Paste your token here">
+                </div>
+                <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded text-sm transition-colors">
+                    <i class="fa-solid fa-right-to-bracket mr-1"></i>Sign In
+                </button>
+            </form>
+
+            <p class="text-xs text-gray-500 mt-4 text-center">
+                Token is stored in <code class="text-gray-400">~/.homelabmon/auth-token</code>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

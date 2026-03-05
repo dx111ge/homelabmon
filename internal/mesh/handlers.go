@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,6 +21,7 @@ func (t *Transport) setupRoutes() {
 	t.mux.HandleFunc("GET /api/v1/metrics/history", t.handleMetricHistory)
 	t.mux.HandleFunc("GET /api/v1/services", t.handleListServices)
 	t.mux.HandleFunc("GET /api/v1/services/{host_id}", t.handleHostServices)
+	t.mux.HandleFunc("POST /api/v1/enroll", t.handleEnroll)
 }
 
 type registerRequest struct {
@@ -193,6 +195,66 @@ func (t *Transport) handleHostServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, services)
+}
+
+// handleEnroll processes enrollment requests from new nodes.
+// The node sends a CSR + enrollment token, and receives a signed cert + CA cert.
+func (t *Transport) handleEnroll(w http.ResponseWriter, r *http.Request) {
+	if t.pki == nil || !t.pki.CAExists() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "this node is not a CA"})
+		return
+	}
+
+	var req struct {
+		Token  string `json:"token"`
+		NodeID string `json:"node_id"`
+		CSR    string `json:"csr"` // PEM-encoded CSR
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+
+	// Validate enrollment token
+	storedToken, err := t.store.GetSetting(r.Context(), "enroll-token")
+	if err != nil || storedToken == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "no enrollment token configured"})
+		return
+	}
+	if req.Token != storedToken {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid enrollment token"})
+		return
+	}
+
+	// Decode and sign the CSR
+	block, _ := pem.Decode([]byte(req.CSR))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid CSR"})
+		return
+	}
+
+	signedCert, err := t.pki.SignCSR(block.Bytes, req.NodeID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to sign CSR")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "signing failed"})
+		return
+	}
+
+	caCert, err := t.pki.CACertPEM()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "CA cert read failed"})
+		return
+	}
+
+	// Invalidate the token after use (one-time)
+	t.store.SetSetting(r.Context(), "enroll-token", "")
+
+	log.Info().Str("node_id", req.NodeID).Msg("node enrolled via token")
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"cert":    string(signedCert),
+		"ca_cert": string(caCert),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

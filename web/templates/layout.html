@@ -13,6 +13,30 @@
     <script src="/static/js/app.js"></script>
     <style>
         [x-cloak] { display: none !important; }
+        .help-tip { position: relative; display: inline-flex; }
+        .help-tip::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            font-size: 11px;
+            line-height: 1.4;
+            padding: 6px 10px;
+            border-radius: 6px;
+            width: max-content;
+            max-width: 260px;
+            white-space: normal;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 50;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .help-tip:hover::after { opacity: 1; }
     </style>
 </head>
 <body class="h-full text-gray-100">
@@ -33,6 +57,11 @@
                 <div class="flex items-center gap-4 text-sm text-gray-400">
                     <span><i class="fa-solid fa-server mr-1"></i>{{.HostCount}} hosts</span>
                     <span><i class="fa-solid fa-circle text-green-400 text-xs mr-1"></i>{{.OnlineCount}} online</span>
+                    <form method="POST" action="/ui/logout" class="inline">
+                        <button type="submit" class="text-gray-500 hover:text-gray-300 ml-2" title="Sign out">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

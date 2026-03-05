@@ -10,7 +10,7 @@
 | 4 | Intelligence | `COMPLETE` | Ollama LLM integration, tool-calling chat, natural language CMDB queries |
 | 4b | Charts & Device Mgmt | `COMPLETE` | Inline statistics (Chart.js), device category/delete, display names |
 | 5 | Integrations | `COMPLETE` | FRITZ!Box, Unifi, HA, Pi-hole, pfSense, SNMP scanner, external plugins |
-| 6 | Security & Polish | `NOT STARTED` | mTLS, enrollment, auth, install scripts, systemd/launchd/Windows service |
+| 6 | Security & Polish | `IN PROGRESS` | mTLS, enrollment, auth, install scripts, systemd/launchd/Windows service |
 
 ---
 
@@ -318,15 +318,59 @@
 
 **Goal:** Production-ready for homelab deployment.
 
-- [ ] CA generation in `homelabmon setup`
-- [ ] mTLS between peers
-- [ ] Agent enrollment via one-time token
-- [ ] Web UI authentication (token or basic auth)
-- [ ] Install scripts (curl | sh one-liner per platform)
-- [ ] systemd unit file (Linux)
-- [ ] launchd plist (macOS)
-- [ ] Windows service wrapper
-- [ ] Metric retention policies (configurable)
+### 6.1 Web UI Authentication
+- [x] `internal/hub/api/auth.go` -- AuthManager with token-based auth
+- [x] Auto-generated 24-char hex token stored in `~/.homelabmon/auth-token`
+- [x] HMAC-SHA256 signed session cookies (`hlm_session`), 7-day expiry
+- [x] Auth middleware wraps all UI/API routes
+- [x] Mesh peer routes exempted from auth (`/api/v1/register`, `/api/v1/heartbeat`, etc.)
+- [x] `web/templates/login.html` -- standalone login page (dark theme)
+- [x] Login/logout handlers + logout button in nav bar
+- [x] `--no-auth` flag to disable auth on trusted networks
+- [x] Verified: redirect to login, wrong token rejected, correct token sets cookie, session works, logout clears cookie
+
+### 6.2 Configurable Settings via UI
+- [x] Migration 005: `settings` table (key-value store)
+- [x] `internal/store/settings.go` -- GetSetting, SetSetting, AllSettings
+- [x] `POST /api/v1/settings` -- save settings (persists to DB, updates viper at runtime)
+- [x] Settings page: editable CPU/memory/disk thresholds and metric retention days
+- [x] Settings page: ntfy.sh and webhook notification URLs (no CLI required)
+- [x] Notification senders rebuilt at runtime when URLs change (Dispatcher.SetSenders)
+- [x] Test button sends test notification (disabled when no URL configured)
+- [x] `--retention-days` CLI flag (default 7, 0 = forever)
+- [x] DB settings loaded at startup (CLI flags override DB values)
+- [x] Purge goroutine reads retention dynamically from viper each cycle
+- [x] Node Info card shows auth + scanning status
+- [x] Verified: save button works, values persist across page reloads and restarts
+
+### 6.3 Install & Service Management
+- [x] `install.sh` -- one-liner installer: detects OS/arch, downloads binary, installs to /usr/local/bin
+- [x] `homelabmon setup --systemd` -- generates and installs systemd service unit (Linux)
+- [x] `homelabmon setup --launchd` -- generates and installs launchd plist (macOS)
+- [x] `homelabmon setup --windows-service` -- installs as Windows service via sc.exe (auto-start, restart on failure)
+- [x] `--uninstall` flag for all three: clean removal of service
+- [x] Auto-detects current user, binary path; helpful output with status/logs/restart commands
+- [x] Clear "run as Administrator" error on Windows when privileges are missing
+
+### 6.4 UI Polish
+- [x] Help tooltips on all settings (CSS `::after` overlay on hover)
+- [x] Descriptions: ntfy, webhook, CPU/mem/disk thresholds, metric retention
+
+### 6.5 mTLS & Enrollment
+- [x] `internal/mesh/pki.go` -- ECDSA P-256 CA generation, node cert signing, CSR handling
+- [x] `homelabmon setup --gen-ca` -- creates CA + node cert (10-year CA, 5-year node)
+- [x] `homelabmon setup --gen-token` -- generates one-time enrollment token (stored in DB)
+- [x] `POST /api/v1/enroll` -- enrollment endpoint: validates token, signs CSR, returns cert + CA
+- [x] Token invalidated after single use (security: prevents replay)
+- [x] Transport auto-detects certs: uses `ListenAndServeTLS` when `ca.crt` + `node.crt` exist
+- [x] `ClientAuth = VerifyClientCertIfGiven` -- browsers work without client certs, peers use mTLS
+- [x] Heartbeat client uses mTLS when certs are loaded (`SetTLSConfig`)
+- [x] `--enroll-url` + `--enroll-token` flags for new node enrollment (generates key, sends CSR, saves certs)
+- [x] Enrollment uses `InsecureSkipVerify` only for initial connection (don't have CA cert yet)
+- [x] TLS 1.3 minimum
+- [x] Verified: CA generation, token generation, HTTPS serving, browser access, enrollment rejection
+
+### 6.6 Remaining
 - [ ] Config hot-reload
 - [ ] Peer federation (multi-site)
 
@@ -371,6 +415,8 @@
 | 2026-03-05 | External plugin via JSON stdin/stdout | Simple, language-agnostic, subprocess isolation, no shared memory or RPC complexity |
 | 2026-03-05 | InsecureSkipVerify for Unifi/pfSense | Self-signed certs are common in homelab; controllers typically run on LAN only |
 | 2026-03-05 | HA token stored as "password" in secrets | Unified credential handling -- all integrations use same SetSecret/GetSecret pattern |
+| 2026-03-05 | Token-based web auth (not basic auth) | Random hex token in file, HMAC-signed cookies, no username/password to manage |
+| 2026-03-05 | Mesh routes exempt from auth | Peers need /api/v1/heartbeat and /api/v1/register without browser sessions |
 
 ---
 

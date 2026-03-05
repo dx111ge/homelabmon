@@ -19,6 +19,14 @@ A single-binary, zero-dependency homelab discovery and monitoring system with me
 
 Download the latest binary for your platform from [Releases](https://github.com/dx111ge/homelabmon/releases/latest). No dependencies, no compilation needed.
 
+### Quick Install (Linux / macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dx111ge/homelabmon/main/install.sh | sh
+```
+
+This auto-detects your OS and architecture, downloads the right binary, and installs it to `/usr/local/bin`.
+
 ### Linux (x86_64)
 
 ```bash
@@ -64,12 +72,24 @@ sudo mv homelabmon /usr/local/bin/
 homelabmon --ui
 ```
 
+To run on login as a launchd service:
+
+```bash
+homelabmon setup --launchd
+```
+
 ### Windows
 
 Download [homelabmon-windows-amd64.exe](https://github.com/dx111ge/homelabmon/releases/latest/download/homelabmon-windows-amd64.exe) and run:
 
 ```powershell
 .\homelabmon-windows-amd64.exe --ui
+```
+
+To install as a Windows service (run as Administrator):
+
+```powershell
+.\homelabmon-windows-amd64.exe setup --windows-service
 ```
 
 ### Build from Source
@@ -110,6 +130,14 @@ sudo setcap cap_net_raw+ep /usr/local/bin/homelabmon
 
 ### Running as a systemd Service
 
+The easiest way to set up a systemd service:
+
+```bash
+homelabmon setup --systemd
+```
+
+This generates the unit file, enables, and starts the service automatically. Or create it manually:
+
 ```ini
 # /etc/systemd/system/homelabmon.service
 [Unit]
@@ -138,15 +166,59 @@ sudo systemctl enable --now homelabmon
 
 The `AmbientCapabilities=CAP_NET_RAW` line grants network scanning without running as root. The service user should be in the `docker` group if Docker discovery is wanted.
 
+## Authentication
+
+The web UI is protected by a token-based login. On first launch, a random access token is generated and saved to `~/.homelabmon/auth-token`. You'll need this token to sign in.
+
+```bash
+# View your token
+cat ~/.homelabmon/auth-token
+```
+
+On Windows the file is at `%USERPROFILE%\.homelabmon\auth-token`.
+
+When you open the dashboard, you'll be redirected to a login page. Paste the token to sign in. Sessions last 7 days.
+
+Mesh peer routes (`/api/v1/heartbeat`, `/api/v1/register`, etc.) are **not** behind auth, so node-to-node communication works without tokens.
+
+To disable auth on a trusted network:
+
+```bash
+homelabmon --ui --no-auth
+```
+
+## Mesh Security (mTLS)
+
+For encrypted and authenticated peer-to-peer communication:
+
+```bash
+# On the first node (becomes the CA):
+homelabmon setup --gen-ca
+
+# Generate a one-time enrollment token:
+homelabmon setup --gen-token
+# Output: f492e8ac70a9c6f832dfd8dd
+
+# On a new node, enroll using the token:
+homelabmon --enroll-url https://192.168.1.10:9600 --enroll-token f492e8ac70a9c6f832dfd8dd
+```
+
+After enrollment, all peer communication uses mutual TLS (TLS 1.3, ECDSA P-256). The web dashboard remains accessible via HTTPS without a client certificate.
+
+mTLS is optional -- nodes without certificates communicate over plain HTTP as before.
+
 ## Usage
 
 ```bash
 homelabmon                                    # bare node: observe + mesh
 homelabmon --ui                               # + web dashboard on :9600
+homelabmon --ui --no-auth                     # + dashboard without login
 homelabmon --scan                             # + network scanning (ARP, mDNS)
 homelabmon --llm http://localhost:11434       # + LLM chat (Ollama)
 homelabmon --peer 192.168.1.10:9600          # + connect to another node
 homelabmon --notify-ntfy https://ntfy.sh/x   # + push notifications
+homelabmon --retention-days 30               # keep 30 days of metrics (default: 7)
+homelabmon --retention-days 0                # keep metrics forever
 ```
 
 All flags can be combined. Every node runs the same binary.

@@ -22,6 +22,7 @@ type UIServer struct {
 	collector    *agent.Collector
 	identity     *models.NodeIdentity
 	dispatcher   *notify.Dispatcher
+	auth         *AuthManager
 	scanEnabled  bool
 	chatHandler  *llm.ChatHandler
 	llmClient    *llm.Client
@@ -31,9 +32,10 @@ type UIServer struct {
 	devsTmpl     *template.Template
 	settingsTmpl *template.Template
 	chatTmpl     *template.Template
+	loginTmpl    *template.Template
 }
 
-func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.NodeIdentity, scanEnabled bool, dispatcher *notify.Dispatcher, chatHandler *llm.ChatHandler, llmClient *llm.Client) (*UIServer, error) {
+func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.NodeIdentity, scanEnabled bool, dispatcher *notify.Dispatcher, chatHandler *llm.ChatHandler, llmClient *llm.Client, auth *AuthManager) (*UIServer, error) {
 	funcMap := template.FuncMap{
 		"formatBytes": formatBytes,
 		"formatPercent": func(p float64) string {
@@ -90,12 +92,17 @@ func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.No
 	if err != nil {
 		return nil, fmt.Errorf("parse chat templates: %w", err)
 	}
+	loginTmpl, err := template.New("").ParseFS(web.TemplateFS, "templates/login.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse login template: %w", err)
+	}
 
 	return &UIServer{
 		store:        s,
 		collector:    collector,
 		identity:     identity,
 		dispatcher:   dispatcher,
+		auth:         auth,
 		scanEnabled:  scanEnabled,
 		chatHandler:  chatHandler,
 		llmClient:    llmClient,
@@ -105,14 +112,20 @@ func NewUIServer(s *store.Store, collector *agent.Collector, identity *models.No
 		devsTmpl:     devsTmpl,
 		settingsTmpl: settingsTmpl,
 		chatTmpl:     chatTmpl,
+		loginTmpl:    loginTmpl,
 	}, nil
 }
 
 // SetupRoutes mounts UI routes on the given mux.
 func (u *UIServer) SetupRoutes(mux *http.ServeMux) {
-	// Static files
+	// Static files (no auth needed)
 	staticFS, _ := fs.Sub(web.StaticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
+	// Login routes (no auth needed)
+	mux.HandleFunc("GET /ui/login", u.handleLoginPage)
+	mux.HandleFunc("POST /ui/login/submit", u.handleLoginSubmit)
+	mux.HandleFunc("POST /ui/logout", u.handleLogout)
 
 	// Pages
 	mux.HandleFunc("GET /", u.handleDashboard)
@@ -125,6 +138,7 @@ func (u *UIServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/devices-content", u.handleDevicesContent)
 	mux.HandleFunc("GET /ui/settings", u.handleSettingsPage)
 	mux.HandleFunc("POST /ui/test-notification", u.handleTestNotification)
+	mux.HandleFunc("POST /api/v1/settings", u.handleSaveSettings)
 
 	// Chat (LLM)
 	mux.HandleFunc("GET /ui/chat", u.handleChatPage)

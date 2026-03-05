@@ -1,8 +1,18 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	cryptorand "crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,6 +61,10 @@ func init() {
 	rootCmd.PersistentFlags().Float64("notify-cpu-threshold", 90, "CPU % threshold for alert notifications")
 	rootCmd.PersistentFlags().Float64("notify-mem-threshold", 90, "memory % threshold for alert notifications")
 	rootCmd.PersistentFlags().Float64("notify-disk-threshold", 90, "disk % threshold for alert notifications")
+	rootCmd.PersistentFlags().Bool("no-auth", false, "disable web UI authentication")
+	rootCmd.PersistentFlags().Int("retention-days", 7, "number of days to keep metric history (0 = forever)")
+	rootCmd.PersistentFlags().String("enroll-url", "", "URL of a CA node to enroll with (e.g., https://192.168.1.10:9600)")
+	rootCmd.PersistentFlags().String("enroll-token", "", "one-time enrollment token from the CA node")
 
 	viper.BindPFlag("ui", rootCmd.PersistentFlags().Lookup("ui"))
 	viper.BindPFlag("llm", rootCmd.PersistentFlags().Lookup("llm"))
@@ -64,6 +78,8 @@ func init() {
 	viper.BindPFlag("notify-cpu-threshold", rootCmd.PersistentFlags().Lookup("notify-cpu-threshold"))
 	viper.BindPFlag("notify-mem-threshold", rootCmd.PersistentFlags().Lookup("notify-mem-threshold"))
 	viper.BindPFlag("notify-disk-threshold", rootCmd.PersistentFlags().Lookup("notify-disk-threshold"))
+	viper.BindPFlag("no-auth", rootCmd.PersistentFlags().Lookup("no-auth"))
+	viper.BindPFlag("retention-days", rootCmd.PersistentFlags().Lookup("retention-days"))
 }
 
 func runAgent(cmd *cobra.Command, args []string) error {
@@ -82,6 +98,15 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+
+	// 2b. Load saved settings (DB values apply only if CLI flag was not explicitly set)
+	if saved, err := st.AllSettings(ctx); err == nil {
+		for k, v := range saved {
+			if !cmd.Flags().Changed(k) && !rootCmd.PersistentFlags().Changed(k) {
+				viper.Set(k, v)
+			}
+		}
+	}
 
 	// 3. Collect host info
 	hostInfo, err := agent.CollectHostInfo(ctx, nodeID)
@@ -197,20 +222,55 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 7. Mesh transport
+	// 7. Mesh transport + mTLS
 	transport := mesh.NewTransport(identity, st, collector)
+
+	pki := mesh.NewPKI(dir)
+	if pki.CAExists() {
+		if err := pki.Load(); err != nil {
+			log.Warn().Err(err).Msg("mTLS certs found but failed to load (running without TLS)")
+		} else {
+			transport.SetPKI(pki)
+			log.Info().Msg("mTLS enabled for mesh transport")
+		}
+	}
+
+	// 7b. Enrollment (if --enroll-url and --enroll-token are set)
+	enrollURL := viper.GetString("enroll-url")
+	enrollToken := viper.GetString("enroll-token")
+	if enrollURL != "" && enrollToken != "" {
+		if err := enrollWithCA(dir, nodeID, enrollURL, enrollToken); err != nil {
+			log.Error().Err(err).Msg("enrollment failed")
+		} else {
+			log.Info().Msg("enrolled successfully, loading certs")
+			if err := pki.Load(); err == nil {
+				transport.SetPKI(pki)
+				log.Info().Msg("mTLS enabled after enrollment")
+			}
+		}
+	}
 
 	// 8. Web UI (if --ui)
 	if viper.GetBool("ui") {
-		uiServer, err := hubapi.NewUIServer(st, collector, identity, scanEnabled, dispatcher, chatHandler, llmClient)
+		authEnabled := !viper.GetBool("no-auth")
+		auth := hubapi.NewAuthManager(dir, authEnabled)
+
+		uiServer, err := hubapi.NewUIServer(st, collector, identity, scanEnabled, dispatcher, chatHandler, llmClient, auth)
 		if err != nil {
 			return fmt.Errorf("create UI server: %w", err)
 		}
 		uiServer.SetupRoutes(transport.Mux())
+
+		if authEnabled {
+			transport.SetHandler(auth.Middleware(transport.Mux()))
+			log.Info().Str("token", auth.Token()).Msg("web UI auth enabled (token in ~/.homelabmon/auth-token)")
+		} else {
+			log.Warn().Msg("web UI auth DISABLED (--no-auth)")
+		}
 		log.Info().Msg("web UI enabled")
 	}
 
-	// 8. Start transport
+	// 9. Start transport
 	bindAddr := viper.GetString("bind")
 	if err := transport.Start(bindAddr); err != nil {
 		return fmt.Errorf("start transport: %w", err)
@@ -231,6 +291,9 @@ func runAgent(cmd *cobra.Command, args []string) error {
 
 	// 10. Heartbeat service
 	hbService := agent.NewHeartbeatService(identity, collector, st)
+	if pki.Ready() {
+		hbService.SetTLSConfig(pki.ClientTLSConfig())
+	}
 	hbService.Start(ctx)
 	defer hbService.Stop()
 
@@ -272,8 +335,9 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	// 13. Background: purge old metrics every hour
+	// 13. Background: purge old metrics every hour (reads retention-days from viper each cycle)
 	go func() {
+		log.Info().Int("retention_days", viper.GetInt("retention-days")).Msg("metric retention policy")
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -281,9 +345,13 @@ func runAgent(cmd *cobra.Command, args []string) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				n, _ := st.PurgeOldMetrics(ctx, 7)
+				days := viper.GetInt("retention-days")
+				if days <= 0 {
+					continue
+				}
+				n, _ := st.PurgeOldMetrics(ctx, days)
 				if n > 0 {
-					log.Info().Int64("purged", n).Msg("purged old metrics")
+					log.Info().Int64("purged", n).Int("retention_days", days).Msg("purged old metrics")
 				}
 			}
 		}
@@ -581,6 +649,84 @@ func runIntegrationSync(ctx context.Context, st *store.Store) {
 		st.UpdateIntegrationStatus(ctx, ig.ID, "ok", "")
 		log.Info().Str("integration", ig.Name).Int("devices", stored).Msg("integration sync complete")
 	}
+}
+
+func enrollWithCA(dir, nodeID, caURL, token string) error {
+	pki := mesh.NewPKI(dir)
+
+	// Generate a key + CSR
+	key, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate key: %w", err)
+	}
+
+	csrTemplate := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			Organization: []string{"HomelabMon"},
+			CommonName:   nodeID,
+		},
+	}
+	csrDER, err := x509.CreateCertificateRequest(cryptorand.Reader, csrTemplate, key)
+	if err != nil {
+		return fmt.Errorf("create CSR: %w", err)
+	}
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+	// Send enrollment request (skip TLS verify since we don't have the CA cert yet)
+	reqBody := map[string]string{
+		"token":   token,
+		"node_id": nodeID,
+		"csr":     string(csrPEM),
+	}
+	body, _ := json.Marshal(reqBody)
+
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Post(caURL+"/api/v1/enroll", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("contact CA: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Cert   string `json:"cert"`
+		CACert string `json:"ca_cert"`
+		Error  string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	if result.Error != "" {
+		return fmt.Errorf("enrollment rejected: %s", result.Error)
+	}
+
+	// Save CA cert
+	if err := os.WriteFile(filepath.Join(dir, "ca.crt"), []byte(result.CACert), 0600); err != nil {
+		return fmt.Errorf("write CA cert: %w", err)
+	}
+
+	// Save node cert
+	if err := os.WriteFile(filepath.Join(dir, "node.crt"), []byte(result.Cert), 0600); err != nil {
+		return fmt.Errorf("write node cert: %w", err)
+	}
+
+	// Save node key
+	keyDER, _ := x509.MarshalECPrivateKey(key)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	if err := os.WriteFile(filepath.Join(dir, "node.key"), keyPEM, 0600); err != nil {
+		return fmt.Errorf("write node key: %w", err)
+	}
+
+	// Verify we can load everything
+	if err := pki.Load(); err != nil {
+		return fmt.Errorf("verify certs: %w", err)
+	}
+
+	return nil
 }
 
 func loadOrCreateNodeID(dir string) string {
