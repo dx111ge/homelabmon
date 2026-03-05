@@ -380,6 +380,16 @@ func (u *UIServer) handleTestNotification(w http.ResponseWriter, r *http.Request
 	w.Write([]byte(`<span class="text-sm text-green-400"><i class="fa-solid fa-check mr-1"></i>Test notification sent!</span>`))
 }
 
+func (u *UIServer) handleTriggerScan(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	if u.ScanFunc == nil {
+		w.Write([]byte(`<span class="text-sm text-yellow-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Scanning not available (start with --scan)</span>`))
+		return
+	}
+	go u.ScanFunc() // run in background -- scan can take 30-60s
+	w.Write([]byte(`<span class="text-sm text-blue-400"><i class="fa-solid fa-satellite-dish mr-1"></i>Scan started...</span>`))
+}
+
 func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 

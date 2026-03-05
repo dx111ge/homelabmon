@@ -268,6 +268,12 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("create UI server: %w", err)
 		}
+		if scanEnabled {
+			uiServer.ScanFunc = func() (int, error) {
+				count := runNetworkScan(ctx, arpScanner, mdnsScanner, st)
+				return count, nil
+			}
+		}
 		uiServer.SetupRoutes(transport.Mux())
 
 		if authEnabled {
@@ -516,7 +522,7 @@ func runDiscovery(ctx context.Context, engine *discovery.Engine, dockerObs *obse
 	}
 }
 
-func runNetworkScan(ctx context.Context, arpScanner *scanners.ARPScanner, mdnsScanner *scanners.MDNSScanner, st *store.Store) {
+func runNetworkScan(ctx context.Context, arpScanner *scanners.ARPScanner, mdnsScanner *scanners.MDNSScanner, st *store.Store) int {
 	var allDevices []plugin.DiscoveredDevice
 
 	// ARP scan
@@ -601,6 +607,7 @@ func runNetworkScan(ctx context.Context, arpScanner *scanners.ARPScanner, mdnsSc
 	if stored > 0 {
 		log.Info().Int("devices", stored).Msg("network scan complete")
 	}
+	return stored
 }
 
 func checkThresholds(ctx context.Context, st *store.Store, dispatcher *notify.Dispatcher, cpuThresh, memThresh, diskThresh float64) {

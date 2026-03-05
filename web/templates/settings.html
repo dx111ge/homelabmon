@@ -121,7 +121,16 @@
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-gray-400">Scanning</span>
-                {{if .ScanEnabled}}<span class="text-green-400">enabled</span>{{else}}<span class="text-gray-500">disabled</span>{{end}}
+                <div class="flex items-center gap-2">
+                    {{if .ScanEnabled}}<span class="text-green-400">enabled</span>{{else}}<span class="text-gray-500">disabled</span>{{end}}
+                    <span id="scan-result"></span>
+                    <button hx-post="/api/v1/scan" hx-target="#scan-result" hx-swap="innerHTML"
+                        class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-0.5 rounded transition-colors"
+                        hx-indicator="#scan-spinner">
+                        <i class="fa-solid fa-radar" id="scan-spinner" style="display:none"></i>
+                        <i class="fa-solid fa-satellite-dish mr-0.5"></i>Scan Now
+                    </button>
+                </div>
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-gray-400">Authentication</span>

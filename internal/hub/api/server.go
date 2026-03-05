@@ -24,6 +24,7 @@ type UIServer struct {
 	dispatcher   *notify.Dispatcher
 	auth         *AuthManager
 	scanEnabled  bool
+	ScanFunc     func() (int, error) // triggers a network scan, returns device count
 	chatHandler  *llm.ChatHandler
 	llmClient    *llm.Client
 	dashTmpl     *template.Template
@@ -139,6 +140,7 @@ func (u *UIServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/settings", u.handleSettingsPage)
 	mux.HandleFunc("POST /ui/test-notification", u.handleTestNotification)
 	mux.HandleFunc("POST /api/v1/settings", u.handleSaveSettings)
+	mux.HandleFunc("POST /api/v1/scan", u.handleTriggerScan)
 
 	// Chat (LLM)
 	mux.HandleFunc("GET /ui/chat", u.handleChatPage)
