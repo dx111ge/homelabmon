@@ -55,7 +55,7 @@ func scanARPLinux(_ context.Context) ([]plugin.DiscoveredDevice, error) {
 		if mac == "00:00:00:00:00:00" || mac == "" {
 			continue
 		}
-		// Resolve hostname
+		// Resolve hostname (throttled to avoid DNS flood)
 		hostname := ""
 		names, err := net.LookupAddr(ip)
 		if err == nil && len(names) > 0 {
@@ -67,6 +67,7 @@ func scanARPLinux(_ context.Context) ([]plugin.DiscoveredDevice, error) {
 			Hostname: hostname,
 			Source:   "arp",
 		})
+		time.Sleep(50 * time.Millisecond) // throttle DNS lookups
 	}
 	return devices, nil
 }
@@ -105,6 +106,7 @@ func scanARPCommand(ctx context.Context) ([]plugin.DiscoveredDevice, error) {
 			Hostname: hostname,
 			Source:   "arp",
 		})
+		time.Sleep(50 * time.Millisecond) // throttle DNS lookups
 	}
 	return devices, nil
 }

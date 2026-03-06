@@ -344,6 +344,7 @@ type settingsPageData struct {
 	MemThreshold  float64
 	DiskThreshold float64
 	RetentionDays int
+	ScanInterval  int
 	NtfyURL       string
 	WebhookURL    string
 	Integrations  []store.Integration
@@ -374,6 +375,7 @@ func (u *UIServer) handleSettingsPage(w http.ResponseWriter, r *http.Request) {
 		MemThreshold:  viper.GetFloat64("notify-mem-threshold"),
 		DiskThreshold: viper.GetFloat64("notify-disk-threshold"),
 		RetentionDays: viper.GetInt("retention-days"),
+		ScanInterval:  viper.GetInt("scan-interval"),
 		NtfyURL:       viper.GetString("notify-ntfy"),
 		WebhookURL:    viper.GetString("notify-webhook"),
 		Integrations:  integrations,
@@ -411,6 +413,7 @@ func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		RetentionDays string `json:"retention_days"`
+		ScanInterval  string `json:"scan_interval"`
 		CPUThreshold  string `json:"cpu_threshold"`
 		MemThreshold  string `json:"mem_threshold"`
 		DiskThreshold string `json:"disk_threshold"`
@@ -429,6 +432,12 @@ func (u *UIServer) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		if days, err := strconv.Atoi(req.RetentionDays); err == nil && days >= 0 {
 			u.store.SetSetting(ctx, "retention-days", req.RetentionDays)
 			viper.Set("retention-days", days)
+		}
+	}
+	if req.ScanInterval != "" {
+		if secs, err := strconv.Atoi(req.ScanInterval); err == nil && secs >= 60 {
+			u.store.SetSetting(ctx, "scan-interval", req.ScanInterval)
+			viper.Set("scan-interval", secs)
 		}
 	}
 	if req.CPUThreshold != "" {

@@ -19,14 +19,15 @@ const DefaultHeartbeatInterval = 60 * time.Second
 
 // HeartbeatService sends periodic heartbeats to all known peers.
 type HeartbeatService struct {
-	identity  *models.NodeIdentity
-	collector *Collector
-	store     *store.Store
-	client    *http.Client
-	interval  time.Duration
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	useTLS    bool
+	identity        *models.NodeIdentity
+	collector       *Collector
+	store           *store.Store
+	client          *http.Client
+	interval        time.Duration
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	useTLS          bool
+	scanCoordinator *ScanCoordinator
 }
 
 func NewHeartbeatService(identity *models.NodeIdentity, collector *Collector, s *store.Store) *HeartbeatService {
@@ -37,6 +38,11 @@ func NewHeartbeatService(identity *models.NodeIdentity, collector *Collector, s 
 		client:    &http.Client{Timeout: 10 * time.Second},
 		interval:  DefaultHeartbeatInterval,
 	}
+}
+
+// SetScanCoordinator sets the scan coordinator for heartbeat scan-time exchange.
+func (h *HeartbeatService) SetScanCoordinator(sc *ScanCoordinator) {
+	h.scanCoordinator = sc
 }
 
 // SetTLSConfig configures the heartbeat client for mTLS.
@@ -124,6 +130,9 @@ func (h *HeartbeatService) sendHeartbeats(ctx context.Context) {
 		Services:   svcs,
 		KnownPeers: knownPeers,
 	}
+	if h.scanCoordinator != nil {
+		hb.LastScanTime = h.scanCoordinator.LocalScanTime()
+	}
 
 	body, _ := json.Marshal(hb)
 
@@ -180,6 +189,11 @@ func (h *HeartbeatService) sendToPeer(ctx context.Context, peer models.PeerInfo,
 		Version:       peerHB.Version,
 		Site:          peerHB.Site,
 	})
+
+	// Record peer's last scan time for scan dedup
+	if h.scanCoordinator != nil && peerHB.LastScanTime != nil {
+		h.scanCoordinator.RecordPeerScan(peerHB.NodeID, *peerHB.LastScanTime)
+	}
 
 	// Gossip: auto-add unknown peers discovered via this peer
 	for _, gp := range peerHB.KnownPeers {

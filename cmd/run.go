@@ -59,6 +59,7 @@ func init() {
 	rootCmd.PersistentFlags().String("bind", ":9600", "bind address for API and UI")
 	rootCmd.PersistentFlags().Int("collect-interval", 30, "metric collection interval in seconds")
 	rootCmd.PersistentFlags().Bool("scan", false, "enable network scanning")
+	rootCmd.PersistentFlags().Int("scan-interval", 300, "network scan interval in seconds (default 5 min)")
 	rootCmd.PersistentFlags().String("notify-ntfy", "", "ntfy.sh topic URL (e.g., https://ntfy.sh/homelabmon-alerts)")
 	rootCmd.PersistentFlags().String("notify-webhook", "", "webhook URL for notifications (Discord, Slack, custom)")
 	rootCmd.PersistentFlags().Float64("notify-cpu-threshold", 90, "CPU % threshold for alert notifications")
@@ -79,6 +80,7 @@ func init() {
 	viper.BindPFlag("bind", rootCmd.PersistentFlags().Lookup("bind"))
 	viper.BindPFlag("collect-interval", rootCmd.PersistentFlags().Lookup("collect-interval"))
 	viper.BindPFlag("scan", rootCmd.PersistentFlags().Lookup("scan"))
+	viper.BindPFlag("scan-interval", rootCmd.PersistentFlags().Lookup("scan-interval"))
 	viper.BindPFlag("notify-ntfy", rootCmd.PersistentFlags().Lookup("notify-ntfy"))
 	viper.BindPFlag("notify-webhook", rootCmd.PersistentFlags().Lookup("notify-webhook"))
 	viper.BindPFlag("notify-cpu-threshold", rootCmd.PersistentFlags().Lookup("notify-cpu-threshold"))
@@ -231,8 +233,16 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// 6b. Scan coordinator (dedup scans across mesh peers)
+	scanInterval := time.Duration(viper.GetInt("scan-interval")) * time.Second
+	if scanInterval < 60*time.Second {
+		scanInterval = 60 * time.Second
+	}
+	scanCoord := agent.NewScanCoordinator(scanInterval)
+
 	// 7. Mesh transport + mTLS
 	transport := mesh.NewTransport(identity, st, collector)
+	transport.SetScanCoordinator(scanCoord)
 	if dockerObs != nil {
 		transport.SetDocker(dockerObs)
 	}
@@ -274,6 +284,7 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		if scanEnabled {
 			uiServer.ScanFunc = func() (int, error) {
 				count := runNetworkScan(ctx, arpScanner, mdnsScanner, st)
+				scanCoord.RecordLocalScan()
 				return count, nil
 			}
 		}
@@ -309,6 +320,7 @@ func runAgent(cmd *cobra.Command, args []string) error {
 
 	// 10. Heartbeat service
 	hbService := agent.NewHeartbeatService(identity, collector, st)
+	hbService.SetScanCoordinator(scanCoord)
 	if pki.Ready() {
 		hbService.SetTLSConfig(pki.ClientTLSConfig())
 	}
@@ -334,20 +346,54 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	}()
 
 	// 12. Background: network scanning (when --scan is enabled)
+	// ARP and mDNS run in separate goroutines, staggered by half the interval
+	// to spread network load and avoid latency spikes.
+	// Smart dedup: skip if a peer already scanned within the interval.
 	if scanEnabled {
-		go func() {
-			// Initial scan after 10s
-			time.Sleep(10 * time.Second)
-			runNetworkScan(ctx, arpScanner, mdnsScanner, st)
+		log.Info().Dur("scan_interval", scanInterval).Msg("network scan interval")
 
-			ticker := time.NewTicker(3 * time.Minute)
+		// ARP scan goroutine
+		go func() {
+			time.Sleep(10 * time.Second)
+			if scanCoord.ShouldScan() {
+				runNetworkScan(ctx, arpScanner, nil, st)
+				scanCoord.RecordLocalScan()
+			}
+
+			ticker := time.NewTicker(scanInterval)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					runNetworkScan(ctx, arpScanner, mdnsScanner, st)
+					if scanCoord.ShouldScan() {
+						runNetworkScan(ctx, arpScanner, nil, st)
+						scanCoord.RecordLocalScan()
+					}
+				}
+			}
+		}()
+
+		// mDNS scan goroutine — offset by half the scan interval
+		go func() {
+			time.Sleep(10*time.Second + scanInterval/2)
+			if scanCoord.ShouldScan() {
+				runNetworkScan(ctx, nil, mdnsScanner, st)
+				scanCoord.RecordLocalScan()
+			}
+
+			ticker := time.NewTicker(scanInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if scanCoord.ShouldScan() {
+						runNetworkScan(ctx, nil, mdnsScanner, st)
+						scanCoord.RecordLocalScan()
+					}
 				}
 			}
 		}()
@@ -616,9 +662,15 @@ func runNetworkScan(ctx context.Context, arpScanner *scanners.ARPScanner, mdnsSc
 		}
 	}
 
-	if stored > 0 {
-		log.Info().Int("devices", stored).Msg("network scan complete")
+	// Determine which scanner(s) ran for the log message
+	var sources []string
+	if arpScanner != nil {
+		sources = append(sources, "arp")
 	}
+	if mdnsScanner != nil {
+		sources = append(sources, "mdns")
+	}
+	log.Info().Int("devices", stored).Strs("sources", sources).Msg("network scan complete")
 	return stored
 }
 

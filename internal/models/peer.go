@@ -40,4 +40,5 @@ type Heartbeat struct {
 	Metric    *MetricSnapshot     `json:"metric,omitempty"`
 	Services  []DiscoveredService `json:"services,omitempty"`
 	KnownPeers []PeerAddr         `json:"known_peers,omitempty"`
+	LastScanTime *time.Time       `json:"last_scan_time,omitempty"` // when this node last ran a network scan
 }

@@ -107,6 +107,11 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Site:          hb.Site,
 	})
 
+	// Record peer's last scan time for scan dedup
+	if t.scanCoordinator != nil && hb.LastScanTime != nil {
+		t.scanCoordinator.RecordPeerScan(hb.NodeID, *hb.LastScanTime)
+	}
+
 	// Gossip: auto-add unknown peers from the sender's known list
 	for _, gp := range hb.KnownPeers {
 		if gp.ID == t.identity.ID || gp.ID == hb.NodeID {
@@ -157,6 +162,9 @@ func (t *Transport) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Metric:     t.collector.Latest(),
 		Services:   mySvcs,
 		KnownPeers: knownPeers,
+	}
+	if t.scanCoordinator != nil {
+		myHB.LastScanTime = t.scanCoordinator.LocalScanTime()
 	}
 
 	writeJSON(w, http.StatusOK, myHB)

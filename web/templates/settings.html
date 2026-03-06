@@ -78,6 +78,16 @@
                 </div>
             </div>
             <div class="flex items-center justify-between border-t border-gray-800 pt-3">
+                <span class="text-gray-400 flex items-center gap-1"><i class="fa-solid fa-satellite-dish"></i>Scan interval
+                    <span class="help-tip" data-tip="How often to run network discovery scans (ARP + mDNS). Scans are staggered to avoid network bursts. Lower values increase network traffic. Minimum: 60 seconds. Requires restart to take effect."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
+                </span>
+                <div class="flex items-center gap-1">
+                    <input type="number" x-model="scanInterval" min="60" max="3600" step="30"
+                        class="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-sm text-white text-right focus:outline-none focus:border-blue-500">
+                    <span class="text-gray-500">sec</span>
+                </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-gray-800 pt-3">
                 <span class="text-gray-400 flex items-center gap-1">
                     <i class="fa-solid fa-location-dot"></i>Site label
                     <span class="help-tip" data-tip="Label this node with a site name for multi-site federation. Nodes with the same site are grouped together on the dashboard. Examples: home, office, cloud."><i class="fa-solid fa-circle-question text-gray-600 hover:text-gray-400 cursor-help"></i></span>
@@ -244,6 +254,7 @@ function settingsEditor() {
         mem: {{printf "%.0f" .MemThreshold}},
         disk: {{printf "%.0f" .DiskThreshold}},
         retention: {{.RetentionDays}},
+        scanInterval: {{.ScanInterval}},
         site: '{{.Site}}',
         msg: '',
         async save() {
@@ -254,6 +265,7 @@ function settingsEditor() {
                     ntfy_url: this.ntfy.trim(),
                     webhook_url: this.webhook.trim(),
                     retention_days: String(this.retention),
+                    scan_interval: String(this.scanInterval),
                     cpu_threshold: String(this.cpu),
                     mem_threshold: String(this.mem),
                     disk_threshold: String(this.disk),

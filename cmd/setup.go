@@ -60,6 +60,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		defaultCfg := `# HomelabMon configuration
 bind: ":9600"
 collect-interval: 30
+scan-interval: 300              # network scan interval in seconds (ARP + mDNS staggered)
 log-level: info
 # site: ""                    # site label for multi-site federation
 # ui: false

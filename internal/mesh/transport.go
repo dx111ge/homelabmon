@@ -19,14 +19,20 @@ type DockerController interface {
 
 // Transport handles HTTP communication between mesh nodes.
 type Transport struct {
-	identity  *models.NodeIdentity
-	store     *store.Store
-	collector *agent.Collector
-	server    *http.Server
-	mux       *http.ServeMux
-	handler   http.Handler
-	pki       *PKI
-	docker    DockerController
+	identity        *models.NodeIdentity
+	store           *store.Store
+	collector       *agent.Collector
+	server          *http.Server
+	mux             *http.ServeMux
+	handler         http.Handler
+	pki             *PKI
+	docker          DockerController
+	scanCoordinator *agent.ScanCoordinator
+}
+
+// SetScanCoordinator sets the scan coordinator for heartbeat scan-time exchange.
+func (t *Transport) SetScanCoordinator(sc *agent.ScanCoordinator) {
+	t.scanCoordinator = sc
 }
 
 func NewTransport(identity *models.NodeIdentity, s *store.Store, collector *agent.Collector) *Transport {
