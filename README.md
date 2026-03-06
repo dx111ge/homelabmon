@@ -2,6 +2,14 @@
 
 A single-binary, zero-dependency homelab discovery and monitoring system with mesh networking, auto-discovery, lightweight CMDB, and local LLM integration.
 
+<p align="center">
+  <img src="docs/screenshot-dashboard.jpg" alt="HomelabMon Dashboard" width="100%">
+</p>
+
+<p align="center">
+  <em>Three-node mesh: Windows PC, QNAP NAS, Ubuntu server -- with network device discovery, Docker containers, and AI chat</em>
+</p>
+
 ## Features
 
 - **Single binary** -- one Go binary, runs on Linux/macOS/Windows/RPi
