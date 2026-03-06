@@ -1,9 +1,12 @@
 # QNAP Container Station -- import as application
 #
-# NOTE: QNAP Container Station supports host networking via docker-compose import.
 # Go to Container Station > Applications > Create > Paste this YAML.
 # Network scanning requires host networking for ARP/mDNS access.
 # Without --scan, homelabmon still monitors containers and syncs with scanning peers.
+#
+# AUTH: The web UI is protected by a token. After first start, find the token with:
+#   Container Station > homelabmon > Terminal > run: cat /data/.homelabmon/auth-token
+# To disable auth, add --no-auth to the command below.
 
 services:
   homelabmon:
@@ -13,5 +16,6 @@ services:
     volumes:
       - /share/Container/homelabmon:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Add --no-auth to disable web UI authentication
     command: ["--ui", "--scan", "--bind", ":9600"]
     restart: unless-stopped

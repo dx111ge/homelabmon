@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/dx111ge/homelabmon/issues</Support>
   <Project>https://github.com/dx111ge/homelabmon</Project>
-  <Overview>Lightweight peer-to-peer homelab monitoring with auto-discovery, mesh networking, and web dashboard. Single binary, zero external dependencies. Discovers devices via ARP, mDNS, SNMP and integrates with FRITZ!Box, Unifi, Home Assistant, Pi-hole, and pfSense.</Overview>
+  <Overview>Lightweight peer-to-peer homelab monitoring with auto-discovery, mesh networking, and web dashboard. Discovers devices via ARP, mDNS, SNMP and integrates with FRITZ!Box, Unifi, Home Assistant, Pi-hole, and pfSense. The web UI is protected by an auth token on first start -- find it with: docker exec homelabmon cat /data/.homelabmon/auth-token (or add --no-auth to PostArgs to disable).</Overview>
   <Category>Tools:Utilities Network:Management</Category>
   <WebUI>http://[IP]:9600</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/dx111ge/homelabmon/main/contrib/unraid/homelabmon.xml</TemplateURL>

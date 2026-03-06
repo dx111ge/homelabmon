@@ -1,3 +1,6 @@
+# AUTH: The web UI is protected by a token on first start.
+# Retrieve it with: docker exec homelabmon cat /data/.homelabmon/auth-token
+# To disable auth, add --no-auth to the command.
 services:
   homelabmon:
     image: ghcr.io/dx111ge/homelabmon:latest
@@ -9,4 +12,6 @@ services:
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Add --no-auth to disable web UI authentication
+    command: ["--ui", "--scan", "--bind", ":9600"]
     restart: unless-stopped

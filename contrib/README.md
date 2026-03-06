@@ -16,6 +16,20 @@ HomelabMon discovers devices via ARP and mDNS, which requires access to the host
 | **Synology** | `synology/` | Container Manager project import (docker-compose) |
 | **QNAP** | `qnap/` | Container Station application import (docker-compose) |
 
+## Authentication
+
+The web UI is protected by an auto-generated token on first start. To retrieve it:
+
+```bash
+# Docker
+docker exec homelabmon cat /data/.homelabmon/auth-token
+
+# Native binary
+cat ~/.homelabmon/auth-token
+```
+
+To disable authentication, add `--no-auth` to the command/args.
+
 ## Docker (generic)
 
 ```bash

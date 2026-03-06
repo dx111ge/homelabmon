@@ -1,11 +1,12 @@
 # Synology Container Manager (Docker) -- import as project
 #
-# NOTE: Synology DSM does not support network_mode: host in the GUI.
-# Import this file via Container Manager > Project > Create > Use docker-compose.
+# Import via Container Manager > Project > Create > Use docker-compose.
 # Network scanning (--scan) requires host networking. Without it, homelabmon
 # still monitors Docker containers and syncs with peers that do scan.
 #
-# For full LAN scanning, run homelabmon as a native binary or on a peer node.
+# AUTH: The web UI is protected by a token. After first start, find the token with:
+#   Container Manager > homelabmon > Terminal > run: cat /data/.homelabmon/auth-token
+# To disable auth, add --no-auth to the command below.
 
 services:
   homelabmon:
@@ -15,5 +16,6 @@ services:
     volumes:
       - /volume1/docker/homelabmon:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Add --no-auth to disable web UI authentication
     command: ["--ui", "--scan", "--bind", ":9600"]
     restart: unless-stopped

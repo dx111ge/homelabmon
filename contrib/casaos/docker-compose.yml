@@ -1,5 +1,9 @@
 # CasaOS App Store manifest
 # https://github.com/IceWhaleTech/CasaOS-AppStore
+#
+# AUTH: The web UI is protected by a token. After first start, find it with:
+#   docker exec homelabmon cat /data/.homelabmon/auth-token
+# To disable auth, add --no-auth to the command below.
 name: homelabmon
 services:
   homelabmon:
@@ -9,6 +13,7 @@ services:
     volumes:
       - /DATA/AppData/homelabmon:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Add --no-auth to disable web UI authentication
     command: ["--ui", "--scan", "--bind", ":9600"]
     restart: unless-stopped
 
