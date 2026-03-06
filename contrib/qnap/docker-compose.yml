@@ -1,0 +1,17 @@
+# QNAP Container Station -- import as application
+#
+# NOTE: QNAP Container Station supports host networking via docker-compose import.
+# Go to Container Station > Applications > Create > Paste this YAML.
+# Network scanning requires host networking for ARP/mDNS access.
+# Without --scan, homelabmon still monitors containers and syncs with scanning peers.
+
+services:
+  homelabmon:
+    image: ghcr.io/dx111ge/homelabmon:latest
+    container_name: homelabmon
+    network_mode: host
+    volumes:
+      - /share/Container/homelabmon:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["--ui", "--scan", "--bind", ":9600"]
+    restart: unless-stopped

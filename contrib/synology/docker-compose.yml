@@ -1,0 +1,19 @@
+# Synology Container Manager (Docker) -- import as project
+#
+# NOTE: Synology DSM does not support network_mode: host in the GUI.
+# Import this file via Container Manager > Project > Create > Use docker-compose.
+# Network scanning (--scan) requires host networking. Without it, homelabmon
+# still monitors Docker containers and syncs with peers that do scan.
+#
+# For full LAN scanning, run homelabmon as a native binary or on a peer node.
+
+services:
+  homelabmon:
+    image: ghcr.io/dx111ge/homelabmon:latest
+    container_name: homelabmon
+    network_mode: host
+    volumes:
+      - /volume1/docker/homelabmon:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["--ui", "--scan", "--bind", ":9600"]
+    restart: unless-stopped

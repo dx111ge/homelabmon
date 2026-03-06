@@ -1,0 +1,12 @@
+services:
+  homelabmon:
+    image: ghcr.io/dx111ge/homelabmon:latest
+    container_name: homelabmon
+    # host networking gives access to the LAN for ARP/mDNS scanning.
+    # If host mode is not available, use bridge mode without --scan
+    # and let a bare-metal peer handle network discovery.
+    network_mode: host
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped

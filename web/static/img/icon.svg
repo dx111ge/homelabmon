@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#1e293b"/>
+  <g transform="translate(256,256)">
+    <!-- Outer ring: mesh network -->
+    <circle cx="0" cy="0" r="160" stroke="#3b82f6" stroke-width="8" fill="none" opacity="0.3"/>
+    <circle cx="0" cy="0" r="110" stroke="#3b82f6" stroke-width="6" fill="none" opacity="0.2"/>
+    <!-- Mesh lines -->
+    <line x1="0" y1="-160" x2="-139" y2="80" stroke="#3b82f6" stroke-width="3" opacity="0.4"/>
+    <line x1="0" y1="-160" x2="139" y2="80" stroke="#3b82f6" stroke-width="3" opacity="0.4"/>
+    <line x1="-139" y1="80" x2="139" y2="80" stroke="#3b82f6" stroke-width="3" opacity="0.4"/>
+    <!-- Node dots -->
+    <circle cx="0" cy="-160" r="18" fill="#3b82f6"/>
+    <circle cx="-139" cy="80" r="18" fill="#3b82f6"/>
+    <circle cx="139" cy="80" r="18" fill="#3b82f6"/>
+    <!-- Center server icon -->
+    <rect x="-40" y="-50" width="80" height="100" rx="8" fill="#3b82f6"/>
+    <rect x="-28" y="-38" width="56" height="14" rx="3" fill="#1e293b"/>
+    <rect x="-28" y="-18" width="56" height="14" rx="3" fill="#1e293b"/>
+    <rect x="-28" y="2" width="56" height="14" rx="3" fill="#1e293b"/>
+    <!-- Server LED dots -->
+    <circle cx="18" cy="-31" r="3" fill="#22c55e"/>
+    <circle cx="18" cy="-11" r="3" fill="#22c55e"/>
+    <circle cx="18" cy="9" r="3" fill="#eab308"/>
+    <!-- Pulse ring -->
+    <circle cx="0" cy="0" r="70" stroke="#3b82f6" stroke-width="4" fill="none" opacity="0.15"/>
+  </g>
+</svg>

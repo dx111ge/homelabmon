@@ -1,0 +1,44 @@
+{
+  "cosmos-installer": {},
+  "minVersion": "0.12.0",
+  "services": {
+    "homelabmon": {
+      "image": "ghcr.io/dx111ge/homelabmon:latest",
+      "container_name": "homelabmon",
+      "network_mode": "host",
+      "command": ["--ui", "--scan", "--bind", ":9600"],
+      "volumes": [
+        {
+          "source": "/opt/cosmos/homelabmon/data",
+          "target": "/data",
+          "type": "bind"
+        },
+        {
+          "source": "/var/run/docker.sock",
+          "target": "/var/run/docker.sock",
+          "type": "bind",
+          "read_only": true
+        }
+      ],
+      "restart": "unless-stopped",
+      "labels": {
+        "cosmos-force-network-mode": "host",
+        "cosmos-icon": "https://raw.githubusercontent.com/dx111ge/homelabmon/main/web/static/img/icon.svg",
+        "cosmos-stack": "homelabmon",
+        "cosmos-auto-update": "true"
+      },
+      "x-cosmos": {
+        "name": "HomelabMon",
+        "description": "Lightweight peer-to-peer homelab monitoring with auto-discovery, mesh networking, and web dashboard.",
+        "url": "https://github.com/dx111ge/homelabmon",
+        "icon": "https://raw.githubusercontent.com/dx111ge/homelabmon/main/web/static/img/icon.svg",
+        "ports": {
+          "9600": {
+            "description": "Web UI",
+            "protocol": "http"
+          }
+        }
+      }
+    }
+  }
+}

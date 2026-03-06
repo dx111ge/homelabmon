@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>HomelabMon</Name>
+  <Repository>ghcr.io/dx111ge/homelabmon:latest</Repository>
+  <Registry>https://github.com/dx111ge/homelabmon/pkgs/container/homelabmon</Registry>
+  <Network>host</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/dx111ge/homelabmon/issues</Support>
+  <Project>https://github.com/dx111ge/homelabmon</Project>
+  <Overview>Lightweight peer-to-peer homelab monitoring with auto-discovery, mesh networking, and web dashboard. Single binary, zero external dependencies. Discovers devices via ARP, mDNS, SNMP and integrates with FRITZ!Box, Unifi, Home Assistant, Pi-hole, and pfSense.</Overview>
+  <Category>Tools:Utilities Network:Management</Category>
+  <WebUI>http://[IP]:9600</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/dx111ge/homelabmon/main/contrib/unraid/homelabmon.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/dx111ge/homelabmon/main/web/static/img/icon.svg</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs>--ui --scan --bind :9600</PostArgs>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/homelabmon" Mode="rw" Description="Persistent data (config, database, certs)" Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Docker Socket" Target="/var/run/docker.sock" Default="/var/run/docker.sock" Mode="ro" Description="Docker socket for container monitoring (optional)" Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="Web UI Port" Target="9600" Default="9600" Mode="tcp" Description="Web dashboard port" Type="Port" Display="always" Required="true" Mask="false"/>
+</Container>

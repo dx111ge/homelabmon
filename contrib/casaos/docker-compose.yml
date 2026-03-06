@@ -1,0 +1,34 @@
+# CasaOS App Store manifest
+# https://github.com/IceWhaleTech/CasaOS-AppStore
+name: homelabmon
+services:
+  homelabmon:
+    image: ghcr.io/dx111ge/homelabmon:latest
+    container_name: homelabmon
+    network_mode: host
+    volumes:
+      - /DATA/AppData/homelabmon:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["--ui", "--scan", "--bind", ":9600"]
+    restart: unless-stopped
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+    - arm
+  main: homelabmon
+  author: dx111ge
+  category: Utilities
+  description:
+    en_us: Lightweight peer-to-peer homelab monitoring with auto-discovery, mesh networking, and web dashboard. Discovers devices via ARP, mDNS, SNMP. Integrates with FRITZ!Box, Unifi, Home Assistant, Pi-hole, and pfSense.
+  developer: dx111ge
+  icon: https://raw.githubusercontent.com/dx111ge/homelabmon/main/web/static/img/icon.svg
+  index: /
+  port_map: "9600"
+  scheme: http
+  title:
+    en_us: HomelabMon
+  tips:
+    before_install:
+      en_us: Uses host networking for LAN device discovery. The web UI will be available on port 9600.
