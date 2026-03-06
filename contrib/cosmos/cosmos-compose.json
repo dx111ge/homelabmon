@@ -18,6 +18,12 @@
           "target": "/var/run/docker.sock",
           "type": "bind",
           "read_only": true
+        },
+        {
+          "source": "/",
+          "target": "/hostfs",
+          "type": "bind",
+          "read_only": true
         }
       ],
       "restart": "unless-stopped",

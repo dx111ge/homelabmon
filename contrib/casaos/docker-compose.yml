@@ -13,6 +13,7 @@ services:
     volumes:
       - /DATA/AppData/homelabmon:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/hostfs:ro
     # Add --no-auth to disable web UI authentication
     command: ["--ui", "--scan", "--bind", ":9600"]
     restart: unless-stopped
